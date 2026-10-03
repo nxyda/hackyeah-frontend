@@ -343,21 +343,14 @@
         </LinearLayout>
 
         <!-- ========================= -->
-        <!-- RZĄD 2 (2 elementy wyśrodkowane:  x  x) -->
+        <!-- RZĄD 2 (3 elementy: x x x) -->
         <!-- ========================= -->
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="8dp"
-            android:gravity="center">
-
-            <!-- PUSTY ELEMENT PO LEWEJ (dla zachowania proporcji 3 kolumn) -->
-            <Space
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="0.5" />
+            android:layout_marginTop="8dp">
 
             <!-- HISTORYCZNE ZAGROŻENIA -->
             <LinearLayout
@@ -421,11 +414,36 @@
 
             </LinearLayout>
 
-            <!-- PUSTY ELEMENT PO PRAWEJ (dla zachowania proporcji 3 kolumn) -->
-            <Space
+            <!-- WYDARZENIA W MIEŚCIE -->
+            <LinearLayout
                 android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="0.5" />
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_margin="3dp">
+
+                <Button
+                    android:id="@+id/layer_city_events"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:text="🏟"
+                    android:textSize="26sp"
+                    android:textAllCaps="false"
+                    android:padding="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Wydarzenia w mieście"
+                    android:textSize="11sp"
+                    android:textAlignment="center"
+                    android:gravity="center" />
+
+            </LinearLayout>
 
         </LinearLayout>
 
@@ -513,6 +531,70 @@
         <!-- ZAMKNIJ -->
         <Button
             android:id="@+id/safe_point_info_close"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="10dp"
+            android:text="Zamknij"
+            android:textAllCaps="false" />
+
+    </LinearLayout>
+
+    <!-- INFORMACJE O WYDARZENIU W MIEŚCIE -->
+    <LinearLayout
+        android:id="@+id/city_event_info_panel"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/report_info_background"
+        android:elevation="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/city_event_info_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🏟️ Wydarzenie w mieście"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/city_event_info_category"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Kategoria:"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/city_event_info_description"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Opis:"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/city_event_info_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="📅 Data:"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/city_event_info_risk"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="⚠️ Wpływ na bezpieczeństwo: +25%"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/city_event_info_close"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:layout_gravity="end"
