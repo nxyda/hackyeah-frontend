@@ -1,5 +1,4 @@
 <?xml version="1.0" encoding="utf-8"?>
-
 <FrameLayout
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
@@ -57,6 +56,360 @@
 
     </LinearLayout>
 
+    <!-- KOMUNIKATY NAWIGACYJNE -->
+    <LinearLayout
+        android:id="@+id/navigation_steps_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="100dp"
+        android:layout_marginEnd="16dp"
+        android:orientation="vertical"
+        android:background="@drawable/navigation_steps_background"
+        android:elevation="8dp"
+        android:visibility="gone">
+
+        <!-- AKTUALNY KROK -->
+        <LinearLayout
+            android:id="@+id/navigation_current_step"
+            android:layout_width="match_parent"
+            android:layout_height="72dp"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingStart="14dp"
+            android:paddingEnd="8dp"
+            android:clickable="true"
+            android:focusable="true">
+
+            <TextView
+                android:id="@+id/navigation_current_icon"
+                android:layout_width="46dp"
+                android:layout_height="46dp"
+                android:gravity="center"
+                android:text="→"
+                android:textSize="28sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:paddingStart="10dp">
+
+                <TextView
+                    android:id="@+id/navigation_current_instruction"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:text="Skręć w prawo"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/navigation_current_distance"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:text="za 180 m"
+                    android:textSize="13sp" />
+
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/navigation_expand_icon"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:gravity="center"
+                android:text="⌄"
+                android:textSize="24sp" />
+
+        </LinearLayout>
+
+        <!-- PEŁNA LISTA -->
+        <LinearLayout
+            android:id="@+id/navigation_all_steps"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:visibility="gone" />
+
+        <!-- PODSUMOWANIE TRASY -->
+        <TextView
+            android:id="@+id/navigation_route_summary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="10dp"
+            android:text="🛡 Bezpieczna  •  2,4 km  •  9 min"
+            android:textSize="13sp" />
+
+    </LinearLayout>
+
+    <!-- PRZYCISK OTWIERANIA WARSTW -->
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/layers_button"
+        android:layout_width="52dp"
+        android:layout_height="52dp"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="16dp"
+        android:layout_marginBottom="140dp"
+        android:text="🗂️"
+        android:textSize="20sp"
+        android:insetLeft="0dp"
+        android:insetTop="0dp"
+        android:insetRight="0dp"
+        android:insetBottom="0dp"
+        android:padding="0dp"
+        android:textAllCaps="false"
+        android:elevation="8dp"
+        app:cornerRadius="26dp"
+        app:backgroundTint="#2196F3"
+        android:contentDescription="Warstwy mapy" />
+
+    <!-- PANEL WARSTW WYSUWANY OD DOŁU -->
+    <LinearLayout
+        android:id="@+id/layers_panel"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_gravity="bottom"
+        android:orientation="vertical"
+        android:paddingStart="16dp"
+        android:paddingTop="14dp"
+        android:paddingEnd="16dp"
+        android:paddingBottom="20dp"
+        android:background="@drawable/bottom_panel_background"
+        android:elevation="20dp"
+        android:visibility="gone">
+
+        <!-- UCHWYT -->
+        <View
+            android:layout_width="40dp"
+            android:layout_height="4dp"
+            android:layout_gravity="center"
+            android:layout_marginBottom="12dp"
+            android:background="@drawable/panel_handle" />
+
+        <!-- NAGŁÓWEK -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical">
+
+            <TextView
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🗂️ Warstwy mapy"
+                android:textSize="20sp"
+                android:textStyle="bold" />
+
+            <Button
+                android:id="@+id/layer_close"
+                android:layout_width="wrap_content"
+                android:layout_height="40dp"
+                android:text="Zamknij"
+                android:textAllCaps="false" />
+
+        </LinearLayout>
+
+        <!-- ========================= -->
+        <!-- RZĄD 1 (3 elementy: x x x) -->
+        <!-- ========================= -->
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="16dp">
+
+            <!-- ŚWIATŁO -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_margin="3dp">
+
+                <Button
+                    android:id="@+id/layer_lighting"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:text="💡"
+                    android:textSize="26sp"
+                    android:textAllCaps="false"
+                    android:padding="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Światło"
+                    android:textSize="11sp"
+                    android:textAlignment="center"
+                    android:gravity="center" />
+
+            </LinearLayout>
+
+            <!-- BEZPIECZNE PUNKTY -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_margin="3dp">
+
+                <Button
+                    android:id="@+id/layer_safe_points"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:text="🛡"
+                    android:textSize="26sp"
+                    android:textAllCaps="false"
+                    android:padding="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Bezpieczne punkty"
+                    android:textSize="11sp"
+                    android:textAlignment="center"
+                    android:gravity="center" />
+
+            </LinearLayout>
+
+            <!-- KAMERY -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_margin="3dp">
+
+                <Button
+                    android:id="@+id/layer_cameras"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:text="📷"
+                    android:textSize="26sp"
+                    android:textAllCaps="false"
+                    android:padding="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Kamery"
+                    android:textSize="11sp"
+                    android:textAlignment="center"
+                    android:gravity="center" />
+
+            </LinearLayout>
+
+        </LinearLayout>
+
+        <!-- ========================= -->
+        <!-- RZĄD 2 (2 elementy wyśrodkowane:  x  x) -->
+        <!-- ========================= -->
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp"
+            android:gravity="center">
+
+            <!-- PUSTY ELEMENT PO LEWEJ (dla zachowania proporcji 3 kolumn) -->
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="0.5" />
+
+            <!-- HISTORYCZNE ZAGROŻENIA -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_margin="3dp">
+
+                <Button
+                    android:id="@+id/layer_historical"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:text="🕰"
+                    android:textSize="26sp"
+                    android:textAllCaps="false"
+                    android:padding="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Historyczne zagrożenia"
+                    android:textSize="11sp"
+                    android:textAlignment="center"
+                    android:gravity="center" />
+
+            </LinearLayout>
+
+            <!-- ZGŁOSZENIA UŻYTKOWNIKÓW -->
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_margin="3dp">
+
+                <Button
+                    android:id="@+id/layer_user_reports"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:text="🚨"
+                    android:textSize="26sp"
+                    android:textAllCaps="false"
+                    android:padding="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Zgłoszenia użytkowników"
+                    android:textSize="11sp"
+                    android:textAlignment="center"
+                    android:gravity="center" />
+
+            </LinearLayout>
+
+            <!-- PUSTY ELEMENT PO PRAWEJ (dla zachowania proporcji 3 kolumn) -->
+            <Space
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="0.5" />
+
+        </LinearLayout>
+
+    </LinearLayout>
+
+    <!-- PRZYCISK DODAWANIA ZGŁOSZENIA -->
     <com.google.android.material.button.MaterialButton
         android:id="@+id/add_report_button"
         android:layout_width="56dp"
@@ -76,33 +429,37 @@
         app:cornerRadius="28dp"
         app:backgroundTint="#F44336" />
 
+    <!-- INFORMACJE O ZGŁOSZENIU -->
     <LinearLayout
         android:id="@+id/report_info_panel"
-        android:layout_width="260dp"
+        android:layout_width="300dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:orientation="vertical"
-        android:padding="14dp"
+        android:padding="16dp"
         android:background="@drawable/report_info_background"
         android:elevation="12dp"
         android:visibility="gone">
 
+        <!-- TYTUŁ -->
         <TextView
             android:id="@+id/report_info_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Zgłoszenie"
-            android:textSize="17sp"
+            android:text="⚠️ Zgłoszone zagrożenie"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
+        <!-- KATEGORIA -->
         <TextView
             android:id="@+id/report_info_category"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="10dp"
             android:text="Kategoria:"
             android:textSize="14sp" />
 
+        <!-- CZAS -->
         <TextView
             android:id="@+id/report_info_time"
             android:layout_width="match_parent"
@@ -111,20 +468,70 @@
             android:text="Godzina:"
             android:textSize="14sp" />
 
+        <!-- POTWIERDZENIA -->
+        <TextView
+            android:id="@+id/report_info_confirmations"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="👥 Potwierdzone przez 4 osoby"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- PYTANIE -->
+        <TextView
+            android:id="@+id/report_info_question"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Czy nadal występuje tutaj zagrożenie?"
+            android:textSize="14sp" />
+
+        <!-- PRZYCISKI -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/report_info_confirm"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="👍"
+                android:textAllCaps="false"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/report_info_invalid"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="👎"
+                android:textAllCaps="false"
+                android:textSize="13sp" />
+
+        </LinearLayout>
+
+        <!-- ID -->
         <TextView
             android:id="@+id/report_info_id"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="8dp"
             android:text="ID:"
-            android:textSize="11sp" />
+            android:textSize="10sp" />
 
+        <!-- ZAMKNIJ -->
         <Button
             android:id="@+id/report_info_close"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:layout_gravity="end"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="4dp"
             android:text="Zamknij"
             android:textAllCaps="false" />
 

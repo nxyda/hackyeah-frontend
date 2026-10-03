@@ -14,6 +14,9 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
@@ -45,7 +48,31 @@ import java.util.List;
 import java.util.Locale;
 import java.util.UUID;
 
+import android.os.Vibrator;
+import android.os.VibrationEffect;
+
 public class MapaFragment extends Fragment {
+
+    private static class NavigationStep {
+
+        String instruction;
+        int distanceMeters;
+        String maneuver;
+
+        Point maneuverPoint;
+
+        NavigationStep(
+                String instruction,
+                int distanceMeters,
+                String maneuver,
+                Point maneuverPoint
+        ) {
+            this.instruction = instruction;
+            this.distanceMeters = distanceMeters;
+            this.maneuver = maneuver;
+            this.maneuverPoint = maneuverPoint;
+        }
+    }
 
     // =========================================================
     // MAPA
@@ -82,6 +109,17 @@ public class MapaFragment extends Fragment {
 
     private Button addReportButton;
 
+    private Button layersButton;
+    private Button layerClose;
+    private LinearLayout layersPanel;
+
+    private Button layerLighting;
+    private Button layerSafePoints;
+    private Button layerCameras;
+    private Button layerHistorical;
+    private Button layerUserReports;
+
+
     // =========================================================
     // LOKALIZACJA
     // =========================================================
@@ -105,6 +143,8 @@ public class MapaFragment extends Fragment {
     private TextView routeDetails;
     private TextView safetyStatus;
 
+    private LinearLayout navigationStepsPanel;
+
     // =========================================================
     // PANEL INFORMACJI O ZGŁOSZENIU
     // =========================================================
@@ -114,8 +154,13 @@ public class MapaFragment extends Fragment {
     private TextView reportInfoCategory;
     private TextView reportInfoTime;
     private TextView reportInfoId;
+    private TextView reportInfoConfirmations;
 
+    private Button reportInfoConfirm;
+    private Button reportInfoInvalid;
     private Button reportInfoClose;
+
+    private TextView navigationRouteSummary;
 
     // =========================================================
     // TESTOWY CEL
@@ -145,6 +190,36 @@ public class MapaFragment extends Fragment {
 
     private final List<Report> reports =
             new ArrayList<>();
+
+    private LinearLayout navigationCurrentStep;
+    private LinearLayout navigationAllSteps;
+
+    private TextView navigationCurrentIcon;
+    private TextView navigationCurrentInstruction;
+    private TextView navigationCurrentDistance;
+    private TextView navigationExpandIcon;
+
+    private boolean navigationExpanded = false;
+
+    private List<NavigationStep> currentNavigationSteps =
+            new ArrayList<>();
+
+    private int currentNavigationStepIndex = 0;
+
+    private boolean navigationVibrationTriggered = false;
+
+    private static final double VIBRATION_DISTANCE_METERS = 30.0;
+
+    private int currentReportConfirmations = 4;
+
+    private boolean currentReportConfirmed = false;
+
+    private boolean lightingLayerEnabled = true;
+    private boolean safePointsLayerEnabled = true;
+    private boolean camerasLayerEnabled = true;
+    private boolean historicalLayerEnabled = true;
+    private boolean userReportsLayerEnabled = true;
+
 
     // =========================================================
     // MODEL ZGŁOSZENIA
@@ -196,6 +271,7 @@ public class MapaFragment extends Fragment {
 
                     currentLocation = point;
 
+                    updateNavigationProgress(point);
                     if (anomalyDetector != null) {
                         // Mapbox daje Point, ale AnomalyDetector potrzebuje android.location.Location.
                         // Musimy szybko to zmapować. Jako Provider podajemy "Mapbox".
@@ -350,6 +426,8 @@ public class MapaFragment extends Fragment {
                 view.findViewById(
                         R.id.mapView
                 );
+        navigationStepsPanel =
+                view.findViewById(R.id.navigation_steps_panel);
 
         // =====================================================
         // LOCATION COMPONENT
@@ -406,6 +484,114 @@ public class MapaFragment extends Fragment {
         addReportButton =
                 view.findViewById(
                         R.id.add_report_button
+                );
+
+        layersButton =
+                view.findViewById(
+                        R.id.layers_button
+                );
+
+        layerClose =
+                view.findViewById(
+                        R.id.layer_close);
+
+        layersPanel =
+                view.findViewById(
+                        R.id.layers_panel
+                );
+
+        layerLighting =
+                view.findViewById(
+                        R.id.layer_lighting
+                );
+
+        layerSafePoints =
+                view.findViewById(
+                        R.id.layer_safe_points
+                );
+
+        layerCameras =
+                view.findViewById(
+                        R.id.layer_cameras
+                );
+
+        layerHistorical =
+                view.findViewById(
+                        R.id.layer_historical
+                );
+
+        layerUserReports =
+                view.findViewById(
+                        R.id.layer_user_reports
+                );
+
+        layersButton.setOnClickListener(v -> {
+
+            if (layersPanel.getVisibility() == View.VISIBLE) {
+
+                layersPanel.setVisibility(
+                        View.GONE
+                );
+
+            } else {
+
+                layersPanel.setVisibility(
+                        View.VISIBLE
+                );
+            }
+        });
+
+        layerClose.setOnClickListener(v -> {
+            layersPanel.setVisibility(View.GONE);
+        });
+
+        navigationStepsPanel =
+                view.findViewById(
+                        R.id.navigation_steps_panel
+                );
+
+        navigationCurrentStep =
+                view.findViewById(
+                        R.id.navigation_current_step
+                );
+
+
+        navigationAllSteps =
+                view.findViewById(
+                        R.id.navigation_all_steps
+                );
+
+        navigationCurrentIcon =
+                view.findViewById(
+                        R.id.navigation_current_icon
+                );
+
+        navigationCurrentInstruction =
+                view.findViewById(
+                        R.id.navigation_current_instruction
+                );
+
+        navigationCurrentDistance =
+                view.findViewById(
+                        R.id.navigation_current_distance
+                );
+
+        navigationExpandIcon =
+                view.findViewById(
+                        R.id.navigation_expand_icon
+                );
+
+        navigationCurrentStep.setOnClickListener(v -> {
+
+            navigationExpanded =
+                    !navigationExpanded;
+
+            updateNavigationPanel();
+        });
+
+        navigationRouteSummary =
+                view.findViewById(
+                        R.id.navigation_route_summary
                 );
 
         // =====================================================
@@ -475,10 +661,71 @@ public class MapaFragment extends Fragment {
                         R.id.report_info_id
                 );
 
+        reportInfoConfirmations =
+                view.findViewById(
+                        R.id.report_info_confirmations
+                );
+
+        reportInfoConfirm =
+                view.findViewById(
+                        R.id.report_info_confirm
+                );
+
+        reportInfoInvalid =
+                view.findViewById(
+                        R.id.report_info_invalid
+                );
+
         reportInfoClose =
                 view.findViewById(
                         R.id.report_info_close
                 );
+
+        reportInfoConfirm.setOnClickListener(v -> {
+
+            if (!currentReportConfirmed) {
+
+                currentReportConfirmations++;
+                currentReportConfirmed = true;
+
+                reportInfoConfirmations.setText(
+                        "👥 Potwierdzone przez "
+                                + currentReportConfirmations
+                                + " osoby"
+                );
+
+                reportInfoConfirm.setText(
+                        "✓"
+                );
+
+                // BLOKADA obu przycisków
+                reportInfoConfirm.setEnabled(false);
+                reportInfoInvalid.setEnabled(false);
+
+                Toast.makeText(
+                        requireContext(),
+                        "Potwierdzono zgłoszenie.",
+                        Toast.LENGTH_SHORT
+                ).show();
+            }
+        });
+
+        reportInfoInvalid.setOnClickListener(v -> {
+
+            // BLOKADA obu przycisków
+            reportInfoConfirm.setEnabled(false);
+            reportInfoInvalid.setEnabled(false);
+
+            reportInfoInvalid.setText(
+                    "✓"
+            );
+
+            Toast.makeText(
+                    requireContext(),
+                    "Dzięki za aktualizację zgłoszenia.",
+                    Toast.LENGTH_SHORT
+            ).show();
+        });
 
         reportInfoPanel.setVisibility(
                 View.GONE
@@ -583,6 +830,7 @@ public class MapaFragment extends Fragment {
             );
 
             drawSafeRoute();
+            showDemoNavigationSteps();
 
             Toast.makeText(
                     requireContext(),
@@ -730,6 +978,63 @@ public class MapaFragment extends Fragment {
                     "🛡 Poziom bezpieczeństwa: Dobry"
             );
         });
+
+        setupLayerButton(
+                layerLighting,
+                "💡",
+                "💡",
+                () -> {
+                    lightingLayerEnabled =
+                            (boolean) layerLighting.getTag();
+
+                    // tutaj później pokażemy/ukryjemy
+                    // warstwę natężenia światła
+                }
+        );
+
+        setupLayerButton(
+                layerSafePoints,
+                "🛡",
+                "🛡",
+                () -> {
+                    safePointsLayerEnabled =
+                            (boolean) layerSafePoints.getTag();
+                }
+        );
+
+        setupLayerButton(
+                layerCameras,
+                "📷",
+                "📷",
+                () -> {
+                    camerasLayerEnabled =
+                            (boolean) layerCameras.getTag();
+                }
+        );
+
+        setupLayerButton(
+                layerHistorical,
+                "🕰",
+                "🕰",
+                () -> {
+                    historicalLayerEnabled =
+                            (boolean) layerHistorical.getTag();
+                }
+        );
+
+        setupLayerButton(
+                layerUserReports,
+                "🚨",
+                "🚨",
+                () -> {
+
+                    userReportsLayerEnabled =
+                            (boolean) layerUserReports.getTag();
+
+                    updateReportLayerVisibility();
+                }
+        );
+
 
         return view;
     }
@@ -1071,6 +1376,16 @@ public class MapaFragment extends Fragment {
                             layerExpected.getValue(),
                             null
                     );
+
+                    style.setStyleLayerProperty(
+                            REPORT_LAYER_ID,
+                            "visibility",
+                            Value.valueOf(
+                                    userReportsLayerEnabled
+                                            ? "visible"
+                                            : "none"
+                            )
+                    );
                 }
         );
     }
@@ -1089,6 +1404,9 @@ public class MapaFragment extends Fragment {
             return;
         }
 
+        currentReportConfirmations = 4;
+        currentReportConfirmed = false;
+
         reportInfoCategory.setText(
                 "Kategoria: " + category
         );
@@ -1100,6 +1418,23 @@ public class MapaFragment extends Fragment {
         reportInfoId.setText(
                 "ID: " + id
         );
+
+        reportInfoConfirmations.setText(
+                "👥 Potwierdzone przez "
+                        + currentReportConfirmations
+                        + " osoby"
+        );
+
+        reportInfoConfirm.setText(
+                "👍"
+        );
+
+        reportInfoInvalid.setText(
+                "👎"
+        );
+
+        reportInfoConfirm.setEnabled(true);
+        reportInfoInvalid.setEnabled(true);
 
         reportInfoPanel.setVisibility(
                 View.VISIBLE
@@ -1671,6 +2006,661 @@ public class MapaFragment extends Fragment {
         mapView = null;
 
         super.onDestroyView();
+    }
+
+    private void showNavigationSteps(
+            List<NavigationStep> steps
+    ) {
+
+        currentNavigationSteps.clear();
+
+        if (steps == null || steps.isEmpty()) {
+
+            navigationStepsPanel.setVisibility(
+                    View.GONE
+            );
+
+            return;
+        }
+
+        currentNavigationSteps.addAll(steps);
+
+        navigationExpanded = false;
+
+        navigationStepsPanel.setVisibility(
+                View.VISIBLE
+        );
+
+        updateNavigationPanel();
+    }
+
+    private String getNavigationIcon(String maneuver) {
+
+        if (maneuver == null) {
+            return "↑";
+        }
+
+        switch (maneuver) {
+
+            case "right":
+                return "→";
+
+            case "left":
+                return "←";
+
+            case "uturn":
+                return "↶";
+
+            case "crosswalk":
+                return "🚶";
+
+            case "finish":
+                return "🏁";
+
+            case "straight":
+            default:
+                return "↑";
+        }
+    }
+
+    private String formatNavigationDistance(int meters) {
+
+        if (meters < 1000) {
+            return "za " + meters + " m";
+        }
+
+        double kilometers = meters / 1000.0;
+
+        if (kilometers == Math.floor(kilometers)) {
+            return "za " + (int) kilometers + " km";
+        }
+
+        return String.format(
+                java.util.Locale.US,
+                "za %.1f km",
+                kilometers
+        );
+    }
+
+    private void showDemoNavigationSteps() {
+
+        if (currentLocation == null) {
+            return;
+        }
+
+        double startLng =
+                currentLocation.longitude();
+
+        double startLat =
+                currentLocation.latitude();
+
+        // ============================================
+        // TESTOWE PUNKTY MANEWRÓW
+        // ============================================
+
+        // Około 15–20 metrów od aktualnej pozycji
+        Point rightTurn =
+                Point.fromLngLat(
+                        startLng + 0.00015,
+                        startLat
+                );
+
+        // Około 40–50 metrów dalej
+        Point leftTurn =
+                Point.fromLngLat(
+                        startLng + 0.00040,
+                        startLat + 0.00020
+                );
+
+        // Jeszcze dalej
+        Point uTurn =
+                Point.fromLngLat(
+                        startLng + 0.00070,
+                        startLat + 0.00040
+                );
+
+        List<NavigationStep> steps =
+                new ArrayList<>();
+
+
+
+        steps.add(
+                new NavigationStep(
+                        "Skręć w prawo",
+                        20,
+                        "right",
+                        rightTurn
+                )
+        );
+
+
+        steps.add(
+                new NavigationStep(
+                        "Idź prosto",
+                        80,
+                        "straight",
+                        null
+                )
+        );
+
+        steps.add(
+                new NavigationStep(
+                        "Skręć w lewo",
+                        350,
+                        "left",
+                        leftTurn
+                )
+        );
+
+
+        steps.add(
+                new NavigationStep(
+                        "Zawróć",
+                        200,
+                        "uturn",
+                        uTurn
+                )
+        );
+
+        currentNavigationStepIndex = 0;
+
+        navigationVibrationTriggered = false;
+
+        showNavigationSteps(steps);
+
+        updateNavigationSummary(
+                "🛡 Bezpieczna",
+                2.4,
+                9
+        );
+
+        // Od razu sprawdź odległość od pierwszego manewru
+        updateNavigationProgress(currentLocation);
+    }
+
+    private void updateNavigationPanel() {
+
+        if (currentNavigationSteps.isEmpty()) {
+
+            navigationStepsPanel.setVisibility(
+                    View.GONE
+            );
+
+            return;
+        }
+
+        if (currentNavigationStepIndex >=
+                currentNavigationSteps.size()) {
+
+            return;
+        }
+
+        NavigationStep currentStep =
+                currentNavigationSteps.get(
+                        currentNavigationStepIndex
+                );
+
+        navigationCurrentIcon.setText(
+                getNavigationIcon(
+                        currentStep.maneuver
+                )
+        );
+
+        navigationCurrentInstruction.setText(
+                currentStep.instruction
+        );
+
+        navigationCurrentDistance.setText(
+                formatNavigationDistance(
+                        currentStep.distanceMeters
+                )
+        );
+
+        if (navigationExpanded) {
+
+            navigationAllSteps.setVisibility(
+                    View.VISIBLE
+            );
+
+            navigationExpandIcon.setText("⌃");
+
+            buildNavigationList();
+
+        } else {
+
+            navigationAllSteps.setVisibility(
+                    View.GONE
+            );
+
+            navigationExpandIcon.setText("⌄");
+        }
+    }
+
+    private void buildNavigationList() {
+
+        navigationAllSteps.removeAllViews();
+
+        if (currentNavigationSteps.size() <= 1) {
+            return;
+        }
+
+        for (int i = 1;
+             i < currentNavigationSteps.size();
+             i++) {
+
+            NavigationStep step =
+                    currentNavigationSteps.get(i);
+
+            LinearLayout row =
+                    new LinearLayout(requireContext());
+
+            row.setLayoutParams(
+                    new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            62
+                    )
+            );
+
+            row.setOrientation(
+                    LinearLayout.HORIZONTAL
+            );
+
+            row.setGravity(
+                    android.view.Gravity.CENTER_VERTICAL
+            );
+
+            row.setPadding(
+                    14,
+                    4,
+                    14,
+                    4
+            );
+
+            TextView icon =
+                    new TextView(requireContext());
+
+            icon.setLayoutParams(
+                    new LinearLayout.LayoutParams(
+                            46,
+                            46
+                    )
+            );
+
+            icon.setGravity(
+                    android.view.Gravity.CENTER
+            );
+
+            icon.setTextSize(26);
+
+            icon.setText(
+                    getNavigationIcon(
+                            step.maneuver
+                    )
+            );
+
+            LinearLayout textContainer =
+                    new LinearLayout(
+                            requireContext()
+                    );
+
+            textContainer.setLayoutParams(
+                    new LinearLayout.LayoutParams(
+                            0,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            1
+                    )
+            );
+
+            textContainer.setOrientation(
+                    LinearLayout.VERTICAL
+            );
+
+            textContainer.setPadding(
+                    10,
+                    0,
+                    0,
+                    0
+            );
+
+            TextView instruction =
+                    new TextView(requireContext());
+
+            instruction.setText(
+                    step.instruction
+            );
+
+            instruction.setTextSize(15);
+
+            instruction.setTypeface(
+                    null,
+                    android.graphics.Typeface.BOLD
+            );
+
+            TextView distance =
+                    new TextView(requireContext());
+
+            distance.setText(
+                    formatNavigationDistance(
+                            step.distanceMeters
+                    )
+            );
+
+            distance.setTextSize(13);
+
+            textContainer.addView(
+                    instruction
+            );
+
+            textContainer.addView(
+                    distance
+            );
+
+            row.addView(icon);
+            row.addView(textContainer);
+
+            navigationAllSteps.addView(row);
+
+            if (i < currentNavigationSteps.size() - 1) {
+
+                View separator =
+                        new View(requireContext());
+
+                separator.setLayoutParams(
+                        new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                                1
+                        )
+                );
+
+                separator.setBackgroundColor(
+                        android.graphics.Color.rgb(
+                                238,
+                                238,
+                                238
+                        )
+                );
+
+                navigationAllSteps.addView(
+                        separator
+                );
+            }
+        }
+    }
+
+    private void updateNavigationSummary(
+            String routeType,
+            double remainingKm,
+            int remainingMinutes
+    ) {
+
+        navigationRouteSummary.setText(
+                routeType
+                        + "  •  "
+                        + String.format(
+                        java.util.Locale.US,
+                        "%.1f km",
+                        remainingKm
+                )
+                        + "  •  "
+                        + remainingMinutes
+                        + " min"
+        );
+    }
+
+    private void vibrateForManeuver(String maneuver) {
+
+        Vibrator vibrator =
+                (Vibrator) requireContext()
+                        .getSystemService(
+                                android.content.Context.VIBRATOR_SERVICE
+                        );
+
+        if (vibrator == null || !vibrator.hasVibrator()) {
+            return;
+        }
+
+        long[] pattern;
+
+        switch (maneuver) {
+
+            case "right":
+                pattern = new long[]{
+                        0,
+                        300
+                };
+                break;
+
+            case "left":
+                pattern = new long[]{
+                        0,
+                        300,
+                        150,
+                        300
+                };
+                break;
+
+            case "uturn":
+                pattern = new long[]{
+                        0,
+                        300,
+                        150,
+                        300,
+                        150,
+                        300
+                };
+                break;
+
+            default:
+                return;
+        }
+
+        if (android.os.Build.VERSION.SDK_INT >=
+                android.os.Build.VERSION_CODES.O) {
+
+            vibrator.vibrate(
+                    VibrationEffect.createWaveform(
+                            pattern,
+                            -1
+                    )
+            );
+
+        } else {
+
+            vibrator.vibrate(pattern, -1);
+        }
+    }
+
+    private double distanceBetweenPoints(
+            Point first,
+            Point second
+    ) {
+
+        double earthRadius = 6371000.0;
+
+        double lat1 =
+                Math.toRadians(first.latitude());
+
+        double lat2 =
+                Math.toRadians(second.latitude());
+
+        double deltaLat =
+                Math.toRadians(
+                        second.latitude()
+                                - first.latitude()
+                );
+
+        double deltaLng =
+                Math.toRadians(
+                        second.longitude()
+                                - first.longitude()
+                );
+
+        double a =
+                Math.sin(deltaLat / 2)
+                        * Math.sin(deltaLat / 2)
+                        +
+                        Math.cos(lat1)
+                                * Math.cos(lat2)
+                                *
+                                Math.sin(deltaLng / 2)
+                                * Math.sin(deltaLng / 2);
+
+        double c =
+                2 * Math.atan2(
+                        Math.sqrt(a),
+                        Math.sqrt(1 - a)
+                );
+
+        return earthRadius * c;
+    }
+
+    private void updateNavigationProgress(
+            Point userLocation
+    ) {
+
+        if (currentNavigationSteps.isEmpty()) {
+            return;
+        }
+
+        if (userLocation == null) {
+            return;
+        }
+
+        if (currentNavigationStepIndex >=
+                currentNavigationSteps.size()) {
+
+            return;
+        }
+
+        NavigationStep currentStep =
+                currentNavigationSteps.get(
+                        currentNavigationStepIndex
+                );
+
+        if (currentStep.maneuverPoint == null) {
+            return;
+        }
+
+        double distance =
+                distanceBetweenPoints(
+                        userLocation,
+                        currentStep.maneuverPoint
+                );
+
+        // Zaktualizuj tekst odległości
+        navigationCurrentDistance.setText(
+                "za "
+                        + Math.round(distance)
+                        + " m"
+        );
+
+        // Jesteśmy wystarczająco blisko manewru
+        if (distance <= VIBRATION_DISTANCE_METERS
+                && !navigationVibrationTriggered) {
+
+            vibrateForManeuver(
+                    currentStep.maneuver
+            );
+
+            navigationVibrationTriggered = true;
+
+            moveToNextNavigationStep();
+        }
+    }
+
+    private void moveToNextNavigationStep() {
+
+        currentNavigationStepIndex++;
+
+        navigationVibrationTriggered = false;
+
+        if (currentNavigationStepIndex >=
+                currentNavigationSteps.size()) {
+
+            navigationCurrentIcon.setText("🏁");
+
+            navigationCurrentInstruction.setText(
+                    "Dotarłeś do celu"
+            );
+
+            navigationCurrentDistance.setText("");
+
+            return;
+        }
+
+        NavigationStep nextStep =
+                currentNavigationSteps.get(
+                        currentNavigationStepIndex
+                );
+
+        navigationCurrentIcon.setText(
+                getNavigationIcon(
+                        nextStep.maneuver
+                )
+        );
+
+        navigationCurrentInstruction.setText(
+                nextStep.instruction
+        );
+
+        navigationCurrentDistance.setText(
+                formatNavigationDistance(
+                        nextStep.distanceMeters
+                )
+        );
+
+        updateNavigationPanel();
+    }
+
+    private void setupLayerButton(
+            Button button,
+            String enabledText,
+            String disabledText,
+            Runnable onToggle
+    ) {
+
+        button.setOnClickListener(v -> {
+
+            boolean enabled =
+                    button.getTag() == null
+                            || (boolean) button.getTag();
+
+            enabled = !enabled;
+
+            button.setTag(enabled);
+
+            button.setText(
+                    enabled
+                            ? enabledText
+                            : disabledText
+            );
+
+            onToggle.run();
+        });
+
+        button.setTag(true);
+    }
+
+    private void updateReportLayerVisibility() {
+        if (mapView == null) return;
+
+        try {
+            mapView.getMapboxMap().getStyle(style -> {
+
+                style.setStyleLayerProperty(
+                        REPORT_LAYER_ID,
+                        "visibility",
+                        Value.valueOf(
+                                userReportsLayerEnabled
+                                        ? "visible"
+                                        : "none"
+                        )
+                );
+
+            });
+
+        } catch (Exception ignored) {
+        }
     }
 
     // =========================================================
