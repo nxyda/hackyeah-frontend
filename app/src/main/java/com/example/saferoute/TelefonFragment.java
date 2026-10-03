@@ -86,11 +86,34 @@ public class TelefonFragment extends Fragment implements TextToSpeech.OnInitList
 
         if (btnHangUp != null) {
             btnHangUp.setOnClickListener(v -> {
-                if (bottomNav != null) {
-                    bottomNav.setVisibility(View.VISIBLE);
+                timerHandler.removeCallbacks(timerRunnable);
+                isCallActive = false;
+
+                if (tvCallTimer != null) {
+                    tvCallTimer.setText("Połączenie zakończone");
                 }
-                requireActivity().getSupportFragmentManager().popBackStack();
+
+                btnHangUp.setEnabled(false);
+
+                v.postDelayed(() -> {
+                    if (bottomNav != null) {
+                        bottomNav.setVisibility(View.VISIBLE);
+
+                        if (bottomNav instanceof com.google.android.material.bottomnavigation.BottomNavigationView) {
+                            ((com.google.android.material.bottomnavigation.BottomNavigationView) bottomNav)
+                                    .setSelectedItemId(R.id.nav_map);
+                        }
+                    }
+
+                    if (isAdded() && requireActivity() != null) {
+                        requireActivity().getSupportFragmentManager()
+                                .beginTransaction()
+                                .replace(R.id.fragment_container, new MapaFragment())
+                                .commit();
+                    }
+                }, 1500);
             });
+
         }
 
         return view;

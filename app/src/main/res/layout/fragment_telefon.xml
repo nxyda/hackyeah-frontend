@@ -4,7 +4,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="#0D0D0E">
+    android:background="@drawable/bg_call_gradient">
 
     <TextView
         android:id="@+id/tvCallStatus"
@@ -45,15 +45,15 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvContactName" />
 
-    <ImageView
+    <com.google.android.material.imageview.ShapeableImageView
         android:id="@+id/ivProfilePicture"
         android:layout_width="140dp"
         android:layout_height="140dp"
         android:layout_marginTop="48dp"
         android:background="#1C1C1E"
-        android:padding="32dp"
-        android:src="@android:drawable/ic_menu_myplaces"
-        app:tint="#8E8E93"
+        android:padding="24dp"
+        android:src="@drawable/ikona_call"
+        app:shapeAppearanceOverlay="?attr/shapeAppearanceMediumComponent"
         app:layout_constraintEnd_toEndOf="parent"
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toBottomOf="@id/tvCallTimer" />
