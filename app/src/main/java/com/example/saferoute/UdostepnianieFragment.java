@@ -24,6 +24,15 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 import androidx.fragment.app.Fragment;
 
+import com.mapbox.geojson.Point;
+import com.mapbox.maps.CameraOptions;
+import com.mapbox.maps.MapView;
+import com.mapbox.maps.Style;
+import com.mapbox.maps.plugin.animation.CameraAnimationsUtils;
+import com.mapbox.maps.plugin.animation.MapAnimationOptions;
+import com.mapbox.bindgen.Expected;
+import com.mapbox.bindgen.Value;
+
 import java.util.Random;
 
 public class UdostepnianieFragment extends Fragment {
@@ -32,11 +41,22 @@ public class UdostepnianieFragment extends Fragment {
     private boolean isBroadcasting = false;
     private boolean isTracking = false;
     private String currentSessionCode = "";
+    private boolean isFirstReceive = true;
 
     // Pętle w tle
     private final Handler handler = new Handler(Looper.getMainLooper());
     private Runnable broadcastRunnable;
     private Runnable trackingRunnable;
+
+    // Mapa dla śledzącego
+    private MapView mapViewReceiver;
+
+    // --- SYMULATOR BAZY DANYCH (Ochrona przed awarią na hackathonie) ---
+    private static String dbMockCode = "";
+    private static double dbMockLat = 0.0;
+    private static double dbMockLng = 0.0;
+    private static long dbMockLastUpdate = 0;
+    // -------------------------------------------------------------------
 
     public UdostepnianieFragment() { }
 
@@ -61,8 +81,16 @@ public class UdostepnianieFragment extends Fragment {
         Button btnStartTracking = view.findViewById(R.id.btn_start_tracking);
         Button btnStopTracking = view.findViewById(R.id.btn_stop_tracking);
         LinearLayout panelLiveData = view.findViewById(R.id.panel_live_data);
-        TextView tvLiveCoordinates = view.findViewById(R.id.tv_live_coordinates);
+        TextView tvLiveStatus = view.findViewById(R.id.tv_live_status);
+        
+        mapViewReceiver = view.findViewById(R.id.mapView_receiver);
+        mapViewReceiver.getMapboxMap().loadStyleUri(Style.MAPBOX_STREETS);
 
+        // Naprawa gestów - zabraniamy głównemu ekranowi przechwytywać dotyk, gdy operujemy na mapie
+        mapViewReceiver.setOnTouchListener((v, event) -> {
+            v.getParent().requestDisallowInterceptTouchEvent(true);
+            return false;
+        });
 
         // ==========================================
         // 1. LOGIKA NADAJNIKA (Udostępnianie trasy)
@@ -79,10 +107,8 @@ public class UdostepnianieFragment extends Fragment {
         };
 
         btnStartBroadcast.setOnClickListener(v -> {
-            // Generowanie kodu sesji
             currentSessionCode = String.format("%04d", new Random().nextInt(10000));
 
-            // Zmiana UI
             isBroadcasting = true;
             tvShareCode.setText("TWÓJ KOD: " + currentSessionCode);
             tvShareCode.setVisibility(View.VISIBLE);
@@ -95,7 +121,6 @@ public class UdostepnianieFragment extends Fragment {
             // Odpalenie pętli nadającej w tle
             handler.post(broadcastRunnable);
 
-            // Okno wysłania kodu bliskim
             String shareMessage = "Cześć! Śledź moją trasę na żywo w aplikacji SafeRoute. Mój kod sesji to: " + currentSessionCode;
             Intent sendIntent = new Intent(Intent.ACTION_SEND);
             sendIntent.putExtra(Intent.EXTRA_TEXT, shareMessage);
@@ -105,7 +130,7 @@ public class UdostepnianieFragment extends Fragment {
 
         btnStopBroadcast.setOnClickListener(v -> {
             isBroadcasting = false;
-            handler.removeCallbacks(broadcastRunnable); // Zatrzymanie pętli
+            handler.removeCallbacks(broadcastRunnable);
 
             tvShareCode.setVisibility(View.GONE);
             tvBroadcastStatus.setText("🔴 Nie nadajesz sygnału");
@@ -114,6 +139,8 @@ public class UdostepnianieFragment extends Fragment {
             btnStopBroadcast.setVisibility(View.GONE);
             btnStartBroadcast.setVisibility(View.VISIBLE);
             Toast.makeText(getContext(), "Zakończono nadawanie lokalizacji.", Toast.LENGTH_SHORT).show();
+            
+            // TODO: SUPABASE - Tutaj możesz opcjonalnie wywołać DELETE FROM live_sessions WHERE code = currentSessionCode
         });
 
 
@@ -125,7 +152,7 @@ public class UdostepnianieFragment extends Fragment {
             @Override
             public void run() {
                 if (isTracking) {
-                    fetchLocationFromDatabase(etReceiveCode.getText().toString(), tvLiveCoordinates);
+                    fetchLocationFromDatabase(etReceiveCode.getText().toString(), tvLiveStatus);
                     handler.postDelayed(this, 5000); // Odbieraj co 5 sekund
                 }
             }
@@ -138,12 +165,14 @@ public class UdostepnianieFragment extends Fragment {
                 return;
             }
 
-            // Zmiana UI
             isTracking = true;
+            isFirstReceive = true; // Przy każdym nowym połączeniu chcemy zacząć od zooma 16.0
             etReceiveCode.setEnabled(false);
             btnStartTracking.setVisibility(View.GONE);
             btnStopTracking.setVisibility(View.VISIBLE);
             panelLiveData.setVisibility(View.VISIBLE);
+            tvLiveStatus.setText("Status: Oczekiwanie na sygnał...");
+            tvLiveStatus.setTextColor(0xFF2196F3);
 
             // Odpalenie pętli odbierającej w tle
             handler.post(trackingRunnable);
@@ -152,7 +181,7 @@ public class UdostepnianieFragment extends Fragment {
 
         btnStopTracking.setOnClickListener(v -> {
             isTracking = false;
-            handler.removeCallbacks(trackingRunnable); // Zatrzymanie pętli
+            handler.removeCallbacks(trackingRunnable);
 
             etReceiveCode.setEnabled(true);
             etReceiveCode.setText("");
@@ -163,42 +192,165 @@ public class UdostepnianieFragment extends Fragment {
         });
     }
 
-    // --- METODY BAZODANOWE (MOCKI) ---
+    // ==========================================
+    // METODY BAZODANOWE
+    // ==========================================
 
     private void sendLocationToDatabase(String sessionCode) {
-        String coords = "50.06143, 19.93658";
+        double currentLat = 50.06143;
+        double currentLng = 19.93658;
+
         if (ContextCompat.checkSelfPermission(requireContext(), Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
             LocationManager locationManager = (LocationManager) requireContext().getSystemService(Context.LOCATION_SERVICE);
             if (locationManager != null) {
                 Location loc = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
                 if (loc == null) loc = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-                if (loc != null) coords = String.format("%.5f, %.5f", loc.getLatitude(), loc.getLongitude());
+                if (loc != null) {
+                    currentLat = loc.getLatitude();
+                    currentLng = loc.getLongitude();
+                }
             }
         }
 
-        // TODO: SUPABASE - Tutaj wstawiasz: UPDATE live_sessions SET lat=..., lng=... WHERE code = sessionCode
-        Log.d("SafeRoute_Live", "NADAJĘ do bazy -> Kod: " + sessionCode + " | Poz: " + coords);
+        // --- SYMULATOR BAZY ---
+        dbMockCode = sessionCode;
+        dbMockLat = currentLat;
+        dbMockLng = currentLng;
+        dbMockLastUpdate = System.currentTimeMillis();
+
+        // TODO: SUPABASE - Tutaj wstawiasz faktyczny kod wysyłający:
+        // INSERT INTO live_sessions (code, lat, lng, last_update) VALUES (sessionCode, currentLat, currentLng, NOW())
+        // ON CONFLICT (code) DO UPDATE SET lat = EXCLUDED.lat, lng = EXCLUDED.lng, last_update = NOW();
+
+        Log.d("SafeRoute_Live", "NADAJĘ do bazy -> Kod: " + sessionCode + " | Poz: " + currentLat + ", " + currentLng);
     }
 
-    private void fetchLocationFromDatabase(String sessionCode, TextView tvCoordinates) {
-        // TODO: SUPABASE - Tutaj wstawiasz: SELECT lat, lng FROM live_sessions WHERE code = sessionCode
-        // Gdyby to była prawdziwa mapa, w tym miejscu przesuwalibyśmy kropkę (znacznik) na mapie.
+    private void fetchLocationFromDatabase(String sessionCode, TextView tvStatus) {
+        // --- SYMULATOR BAZY ---
+        // Zamiast uderzać do Supabase, sprawdzamy naszą statyczną zmienną
+        String dbCode = dbMockCode;
+        double lat = dbMockLat;
+        double lng = dbMockLng;
+        long lastUpdateMs = dbMockLastUpdate; // Czas w milisekundach (epoch)
 
-        // Mockowanie zmiennej lokalizacji dla jury
-        double mockLat = 50.06100 + (Math.random() * 0.001);
-        double mockLng = 19.93600 + (Math.random() * 0.001);
-        String receivedCoords = String.format("📍 %.5f, %.5f", mockLat, mockLng);
+        // TODO: SUPABASE - Tutaj wstawiasz pobieranie danych:
+        // SELECT lat, lng, EXTRACT(EPOCH FROM last_update) * 1000 AS last_update_ms FROM live_sessions WHERE code = sessionCode;
+        // Pobrane dane przypisz do zmiennych wyżej.
 
-        tvCoordinates.setText(receivedCoords + "\n(Ostatnia akt: teraz)");
-        Log.d("SafeRoute_Live", "ODBIERAM z bazy -> Kod: " + sessionCode + " | Poz: " + receivedCoords);
+        if (!sessionCode.equals(dbCode) || lastUpdateMs == 0) {
+            tvStatus.setText("Status: Nie znaleziono aktywnej sesji.");
+            tvStatus.setTextColor(0xFFF44336);
+            return;
+        }
+
+        long currentTime = System.currentTimeMillis();
+        long timeDifference = currentTime - lastUpdateMs;
+
+        // SPRAWDZAMY CZY MINĘŁO PONAD 20 SEKUND OD OSTATNIEJ AKTUALIZACJI
+        if (timeDifference > 20000) {
+            tvStatus.setText("Status: Sygnał utracony (Zakończono udostępnianie)");
+            tvStatus.setTextColor(0xFFF44336); // Czerwony
+            // Tu można dodać wyszarzanie mapy
+        } else {
+            tvStatus.setText("Status: Odbieranie na żywo 🟢");
+            tvStatus.setTextColor(0xFF4CAF50); // Zielony
+
+            if (mapViewReceiver != null) {
+                Point newLocation = Point.fromLngLat(lng, lat);
+
+                // Budujemy opcje kamery (zawsze aktualizujemy sam środek)
+                CameraOptions.Builder cameraBuilder = new CameraOptions.Builder().center(newLocation);
+                
+                // Wymuszamy przybliżenie 16.0 TYLKO przy pierwszej odebranej lokalizacji
+                if (isFirstReceive) {
+                    cameraBuilder.zoom(16.0);
+                    isFirstReceive = false;
+                }
+
+                // Płynne "sunięcie" kamery (nie nadpisuje zooma, jeśli użytkownik sam go zmienił)
+                CameraAnimationsUtils.getCamera(mapViewReceiver).easeTo(
+                        cameraBuilder.build(),
+                        new MapAnimationOptions.Builder().duration(2000).build(),
+                        null 
+                );
+
+                // Rysowanie i aktualizacja niebieskiej kropki znajomego na mapie
+                updateTrackedUserMarker(lat, lng);
+            }
+        }
+        
+        Log.d("SafeRoute_Live", "ODBIERAM z bazy -> Diff: " + (timeDifference/1000) + "s");
+    }
+
+    // ==========================================
+    // RYSOWANIE KROPKI ŚLEDZONEJ OSOBY
+    // ==========================================
+    private void updateTrackedUserMarker(double lat, double lng) {
+        if (mapViewReceiver == null) return;
+
+        mapViewReceiver.getMapboxMap().getStyle(style -> {
+            // Usuwamy starą pozycję, by narysować znacznik w nowym miejscu
+            try {
+                style.removeStyleLayer("tracked-user-layer");
+                style.removeStyleSource("tracked-user-source");
+            } catch (Exception ignored) { }
+
+            // Generujemy koordynaty w locie
+            String sourceJson = "{\"type\":\"geojson\",\"data\":{\"type\":\"Feature\",\"geometry\":{\"type\":\"Point\",\"coordinates\":[" + lng + "," + lat + "]}}}";
+
+            Expected<String, Value> sourceExpected = Value.fromJson(sourceJson);
+            if (!sourceExpected.isError()) {
+                style.addStyleSource("tracked-user-source", sourceExpected.getValue());
+            }
+
+            // Stylizujemy kropkę na niebiesko, podobnie jak lokalizację w Google Maps
+            String layerJson = "{"
+                    + "\"id\":\"tracked-user-layer\","
+                    + "\"type\":\"circle\","
+                    + "\"source\":\"tracked-user-source\","
+                    + "\"paint\":{"
+                    + "\"circle-radius\":10,"
+                    + "\"circle-color\":\"#2196F3\","
+                    + "\"circle-stroke-color\":\"#FFFFFF\","
+                    + "\"circle-stroke-width\":3"
+                    + "}"
+                    + "}";
+
+            Expected<String, Value> layerExpected = Value.fromJson(layerJson);
+            if (!layerExpected.isError()) {
+                style.addStyleLayer(layerExpected.getValue(), null);
+            }
+        });
+    }
+
+    // ==========================================
+    // CYKL ŻYCIA MAPY MAPBOX
+    // ==========================================
+
+    @Override
+    public void onStart() {
+        super.onStart();
+        if (mapViewReceiver != null) mapViewReceiver.onStart();
+    }
+
+    @Override
+    public void onStop() {
+        super.onStop();
+        if (mapViewReceiver != null) mapViewReceiver.onStop();
     }
 
     @Override
     public void onDestroyView() {
         super.onDestroyView();
-        // Zabezpieczenie przed wyciekiem pamięci
+        if (mapViewReceiver != null) mapViewReceiver.onDestroy();
         isBroadcasting = false;
         isTracking = false;
         handler.removeCallbacksAndMessages(null);
+    }
+    
+    @Override
+    public void onLowMemory() {
+        super.onLowMemory();
+        if (mapViewReceiver != null) mapViewReceiver.onLowMemory();
     }
 }

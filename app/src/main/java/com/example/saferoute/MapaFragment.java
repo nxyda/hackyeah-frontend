@@ -50,6 +50,11 @@ import com.mapbox.maps.RenderedQueryGeometry;
 import com.mapbox.maps.RenderedQueryOptions;
 import com.mapbox.maps.QueriedRenderedFeature;
 import com.mapbox.geojson.Point;
+import com.mapbox.maps.plugin.locationcomponent.OnIndicatorBearingChangedListener;
+import androidx.activity.OnBackPressedCallback;
+import com.mapbox.maps.plugin.LocationPuck2D;
+import androidx.core.content.ContextCompat;
+import com.mapbox.maps.ImageHolder;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -149,6 +154,19 @@ public class MapaFragment extends Fragment {
     private boolean firstLocationReceived = false;
 
     private boolean locationListenerAdded = false;
+
+    private boolean isNavigating = false;
+    private Button btnExitNavigation;
+
+    // Nasłuchiwacz kompasu - obraca mapę z telefonem
+    private final OnIndicatorBearingChangedListener onIndicatorBearingChangedListener = bearing -> {
+        if (mapView != null && isNavigating) {
+            // "Zatrzaskujemy" kamerę na aktualnym obrocie, bez dotykania ustawień Mapboxa!
+            mapView.getMapboxMap().setCamera(
+                    new CameraOptions.Builder().bearing(bearing).build()
+            );
+        }
+    };
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
 
@@ -335,47 +353,35 @@ public class MapaFragment extends Fragment {
     // LISTENER GPS
     // =========================================================
 
-    private final OnIndicatorPositionChangedListener
-            onIndicatorPositionChangedListener =
-            new OnIndicatorPositionChangedListener() {
+    private final OnIndicatorPositionChangedListener onIndicatorPositionChangedListener = new OnIndicatorPositionChangedListener() {
+        @Override
+        public void onIndicatorPositionChanged(Point point) {
+            currentLocation = point;
+            updateNavigationProgress(point);
+            
+            if (anomalyDetector != null) {
+                Location androidLoc = new Location("Mapbox");
+                androidLoc.setLatitude(point.latitude());
+                androidLoc.setLongitude(point.longitude());
+                anomalyDetector.processNewLocation(androidLoc);
+            }
 
-                @Override
-                public void onIndicatorPositionChanged(
-                        Point point
-                ) {
-
-                    currentLocation = point;
-
-                    updateNavigationProgress(point);
-                    if (anomalyDetector != null) {
-                        // Mapbox daje Point, ale AnomalyDetector potrzebuje android.location.Location.
-                        // Musimy szybko to zmapować. Jako Provider podajemy "Mapbox".
-                        Location androidLoc = new Location("Mapbox");
-                        androidLoc.setLatitude(point.latitude());
-                        androidLoc.setLongitude(point.longitude());
-                        
-                        // Uwaga: Mapboxowa metoda OnIndicatorPositionChangedListener nie dostarcza prędkości (speed).
-                        // Detektor poradzi sobie z postojem z samego dystansu, ale dla biegu musimy symulować / liczyć.
-                        // Zostawiam wywołanie; w pełni produkcyjnej wersji brałbyś to z LocationManager z Androida.
-                        anomalyDetector.processNewLocation(androidLoc);
-                    }
-
-                    if (!firstLocationReceived) {
-
-                        firstLocationReceived = true;
-
-                        if (mapView != null) {
-
-                            mapView.getMapboxMap().setCamera(
-                                    new CameraOptions.Builder()
-                                            .center(point)
-                                            .zoom(14.0)
-                                            .build()
-                            );
-                        }
-                    }
+            if (mapView != null) {
+                if (isNavigating) {
+                    // Kamera "goni" kropkę podczas nawigacji 3D
+                    mapView.getMapboxMap().setCamera(
+                            new CameraOptions.Builder().center(point).build()
+                    );
+                } else if (!firstLocationReceived) {
+                    // Pierwsze odpalenie aplikacji (centrowanie mapy)
+                    firstLocationReceived = true;
+                    mapView.getMapboxMap().setCamera(
+                            new CameraOptions.Builder().center(point).zoom(14.0).build()
+                    );
                 }
-            };
+            }
+        }
+    };
 
     // =========================================================
     // CLICK NA MAPIE
@@ -690,6 +696,9 @@ public class MapaFragment extends Fragment {
                 view.findViewById(
                         R.id.navigation_route_summary
                 );
+
+        btnExitNavigation = view.findViewById(R.id.btn_exit_navigation);
+        btnExitNavigation.setOnClickListener(v -> exitNavigationMode());
 
         // =====================================================
         // TRASY
@@ -1187,6 +1196,22 @@ public class MapaFragment extends Fragment {
                     updateReportLayerVisibility();
                 }
         );
+
+        requireActivity().getOnBackPressedDispatcher().addCallback(getViewLifecycleOwner(), new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (isNavigating) {
+                    exitNavigationMode();
+                } else if (layersPanel != null && layersPanel.getVisibility() == View.VISIBLE) {
+                    layersPanel.setVisibility(View.GONE);
+                } else if (reportInfoPanel != null && reportInfoPanel.getVisibility() == View.VISIBLE) {
+                    reportInfoPanel.setVisibility(View.GONE);
+                } else {
+                    setEnabled(false);
+                    requireActivity().onBackPressed();
+                }
+            }
+        });
 
 
         return view;
@@ -1911,44 +1936,41 @@ public class MapaFragment extends Fragment {
     // KAMERA NA TRASĘ
     // =========================================================
 
-    private void moveCameraToRoute(
-            List<Point> points
-    ) {
-
-        if (points == null
-                || points.isEmpty()) {
+    private void moveCameraToRoute(List<Point> points) {
+        if (points == null || points.isEmpty() || mapView == null) {
             return;
         }
 
-        Point first =
-                points.get(0);
-
-        Point last =
-                points.get(
-                        points.size() - 1
+        // Jeśli jesteśmy w trybie nawigacji (3D), NIE zmieniaj kąta na 0
+        if (isNavigating) {
+            if (currentLocation != null) {
+                // Pobierz aktualny kąt obrotu kompasu z mapy, żeby kamera nie "szarpała"
+                double currentBearing = mapView.getMapboxMap().getCameraState().getBearing();
+                
+                mapView.getMapboxMap().setCamera(
+                        new CameraOptions.Builder()
+                                .center(currentLocation)
+                                .zoom(18.0)
+                                .pitch(60.0) 
+                                .bearing(currentBearing) // <- Utrzymujemy bieżący kierunek patrzenia!
+                                .build() 
                 );
+            }
+            return;
+        }
 
-        double centerLng =
-                (
-                        first.longitude()
-                                + last.longitude()
-                ) / 2.0;
-
-        double centerLat =
-                (
-                        first.latitude()
-                                + last.latitude()
-                ) / 2.0;
+        // Zwykły podgląd mapy z góry (2D)
+        Point first = points.get(0);
+        Point last = points.get(points.size() - 1);
+        double centerLng = (first.longitude() + last.longitude()) / 2.0;
+        double centerLat = (first.latitude() + last.latitude()) / 2.0;
 
         mapView.getMapboxMap().setCamera(
                 new CameraOptions.Builder()
-                        .center(
-                                Point.fromLngLat(
-                                        centerLng,
-                                        centerLat
-                                )
-                        )
+                        .center(Point.fromLngLat(centerLng, centerLat))
                         .zoom(13.0)
+                        .pitch(0.0)
+                        .bearing(0.0)
                         .build()
         );
     }
@@ -1978,8 +2000,22 @@ public class MapaFragment extends Fragment {
 
         locationComponent.updateSettings(
                 settings -> {
-
                     settings.setEnabled(true);
+                    
+                    // Zmuszamy kropkę do obracania się z kompasem telefonu
+                    settings.setPuckBearingEnabled(true);
+
+                    // Ładujemy wbudowane w Mapboxa ikony ze strzałką kierunkową (cone)
+                    LocationPuck2D puck = new LocationPuck2D();
+                    puck.setBearingImage(ImageHolder.from(com.mapbox.maps.R.drawable.mapbox_user_bearing_icon));
+                    puck.setShadowImage(ImageHolder.from(com.mapbox.maps.R.drawable.mapbox_user_icon_shadow));
+                    puck.setTopImage(ImageHolder.from(com.mapbox.maps.R.drawable.mapbox_user_puck_icon));
+                    
+                    // NOWE: Skalujemy wskaźnik do bardziej proporcjonalnych rozmiarów (np. 35% oryginalnego rozmiaru)
+                    // Wartość podana w postaci JSON-owej tablicy (wymagane przez Mapbox API)
+                    puck.setScaleExpression("[\"interpolate\", [\"linear\"], [\"zoom\"], 10, 0.35, 20, 0.6]");
+                    
+                    settings.setLocationPuck(puck);
 
                     return null;
                 }
@@ -1987,9 +2023,16 @@ public class MapaFragment extends Fragment {
 
         if (!locationListenerAdded) {
 
+            // Nasłuchiwanie zmiany lokalizacji
             locationComponent
                     .addOnIndicatorPositionChangedListener(
                             onIndicatorPositionChangedListener
+                    );
+            
+            // NOWE: Nasłuchiwanie zmiany obrotu (kompas)
+            locationComponent
+                    .addOnIndicatorBearingChangedListener(
+                            onIndicatorBearingChangedListener
                     );
 
             locationListenerAdded = true;
@@ -2085,9 +2128,16 @@ public class MapaFragment extends Fragment {
         if (locationComponent != null
                 && locationListenerAdded) {
 
+            // Zatrzymanie GPS
             locationComponent
                     .removeOnIndicatorPositionChangedListener(
                             onIndicatorPositionChangedListener
+                    );
+            
+            // NOWE: Zatrzymanie kompasu
+            locationComponent
+                    .removeOnIndicatorBearingChangedListener(
+                            onIndicatorBearingChangedListener
                     );
 
             locationListenerAdded = false;
@@ -2132,9 +2182,16 @@ public class MapaFragment extends Fragment {
         if (locationComponent != null
                 && locationListenerAdded) {
 
+            // Zatrzymanie GPS
             locationComponent
                     .removeOnIndicatorPositionChangedListener(
                             onIndicatorPositionChangedListener
+                    );
+            
+            // NOWE: Zatrzymanie kompasu
+            locationComponent
+                    .removeOnIndicatorBearingChangedListener(
+                            onIndicatorBearingChangedListener
                     );
 
             locationListenerAdded = false;
@@ -2275,8 +2332,6 @@ public class MapaFragment extends Fragment {
         List<NavigationStep> steps =
                 new ArrayList<>();
 
-
-
         steps.add(
                 new NavigationStep(
                         "Skręć w prawo",
@@ -2285,7 +2340,6 @@ public class MapaFragment extends Fragment {
                         rightTurn
                 )
         );
-
 
         steps.add(
                 new NavigationStep(
@@ -2305,7 +2359,6 @@ public class MapaFragment extends Fragment {
                 )
         );
 
-
         steps.add(
                 new NavigationStep(
                         "Zawróć",
@@ -2316,6 +2369,8 @@ public class MapaFragment extends Fragment {
         );
 
         currentNavigationStepIndex = 0;
+
+        isNavigating = true;
 
         navigationVibrationTriggered = false;
 
@@ -2329,6 +2384,55 @@ public class MapaFragment extends Fragment {
 
         // Od razu sprawdź odległość od pierwszego manewru
         updateNavigationProgress(currentLocation);
+
+        // WŁĄCZAMY DETEKCJĘ ZAGROŻEŃ TYLKO NA TRASIE
+        if (anomalyDetector != null) {
+            anomalyDetector.setNavigationActive(true);
+        }
+
+        // AKTYWACJA TRYBU NAWIGACJI 3D (JAK GOOGLE MAPS)
+        if (locationComponent != null) {
+            locationComponent.updateSettings(settings -> {
+                settings.setEnabled(true);
+                settings.setPulsingEnabled(false); // wyłączamy pulsowanie z trybu spoczynku
+                return null;
+            });
+            
+            // NOWE: Obliczamy idealny kąt początkowy (kierunek do pierwszego manewru)
+            double routeBearing = calculateBearing(currentLocation, steps.get(0).maneuverPoint);
+            
+            mapView.getMapboxMap().setCamera(
+                    new CameraOptions.Builder()
+                            .center(currentLocation)
+                            .zoom(18.0) 
+                            .pitch(60.0) 
+                            .bearing(routeBearing) // Startujemy skierowani idealnie wzdłuż trasy!
+                            .build()
+            );
+        }
+    }
+
+    private void exitNavigationMode() {
+        if (!isNavigating) return;
+        isNavigating = false;
+        
+        navigationStepsPanel.setVisibility(View.GONE);
+        
+        if (anomalyDetector != null) {
+            anomalyDetector.setNavigationActive(false);
+        }
+        
+        // Wracamy do widoku 2D (płasko) patrząc na północ
+        if (currentLocation != null) {
+            mapView.getMapboxMap().setCamera(
+                    new CameraOptions.Builder()
+                            .center(currentLocation)
+                            .zoom(14.0)
+                            .pitch(0.0) // Płasko
+                            .bearing(0.0) // Północ u góry
+                            .build()
+            );
+        }
     }
 
     private void updateNavigationPanel() {
@@ -2623,6 +2727,24 @@ public class MapaFragment extends Fragment {
         }
     }
 
+    // =========================================================
+    // OBLICZANIE KĄTA DO CELU (ŻEBY DROGA BYŁA NA GÓRZE)
+    // =========================================================
+    private double calculateBearing(Point start, Point end) {
+        double lat1 = Math.toRadians(start.latitude());
+        double lon1 = Math.toRadians(start.longitude());
+        double lat2 = Math.toRadians(end.latitude());
+        double lon2 = Math.toRadians(end.longitude());
+
+        double dLon = lon2 - lon1;
+
+        double y = Math.sin(dLon) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+        double bearing = Math.atan2(y, x);
+        return (Math.toDegrees(bearing) + 360) % 360;
+    }
+
     private double distanceBetweenPoints(
             Point first,
             Point second
@@ -2735,6 +2857,23 @@ public class MapaFragment extends Fragment {
             navigationCurrentInstruction.setText(
                     "Dotarłeś do celu"
             );
+
+            // WYŁĄCZAMY DETEKCJĘ
+            if (anomalyDetector != null) {
+                anomalyDetector.setNavigationActive(false);
+            }
+
+            // POWRÓT DO PŁASKIEJ MAPY
+            if (currentLocation != null) {
+                mapView.getMapboxMap().setCamera(
+                        new CameraOptions.Builder()
+                                .center(currentLocation)
+                                .zoom(15.0)
+                                .pitch(0.0) // Płasko, z góry
+                                .bearing(0.0) // Północ na górze
+                                .build()
+                );
+            }
 
             navigationCurrentDistance.setText("");
 
