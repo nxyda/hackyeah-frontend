@@ -40,6 +40,9 @@ android {
             "MAPBOX_ACCESS_TOKEN",
             "\"$mapboxAccessToken\""
         )
+
+        val geminiKey = localProperties.getProperty("GEMINI_API_KEY") ?: ""
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiKey\"")
     }
 
     buildTypes {

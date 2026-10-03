@@ -25,6 +25,15 @@
         android:background="@drawable/search_background"
         android:elevation="8dp">
 
+        <ImageButton
+            android:id="@+id/btn_saved_places"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?attr/selectableItemBackgroundBorderless"
+            android:src="@android:drawable/ic_menu_myplaces"
+            app:tint="#4CAF50"
+            android:contentDescription="Zapisane miejsca" />
+
         <EditText
             android:id="@+id/search_destination"
             android:layout_width="0dp"
