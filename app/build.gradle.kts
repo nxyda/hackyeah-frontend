@@ -1,11 +1,29 @@
+import java.util.Properties
+import java.io.FileInputStream
+
 plugins {
     alias(libs.plugins.android.application)
 }
 
+val localProperties = Properties()
+val localPropertiesFile = rootProject.file("local.properties")
+
+if (localPropertiesFile.exists()) {
+    localProperties.load(FileInputStream(localPropertiesFile))
+}
+
+val mapboxAccessToken = localProperties.getProperty("MAPBOX_ACCESS_TOKEN")
+    ?: ""
+
 android {
     namespace = "com.example.saferoute"
+
     compileSdk {
         version = release(36)
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 
     defaultConfig {
@@ -16,6 +34,12 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField(
+            "String",
+            "MAPBOX_ACCESS_TOKEN",
+            "\"$mapboxAccessToken\""
+        )
     }
 
     buildTypes {
@@ -27,6 +51,7 @@ android {
             )
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
@@ -36,6 +61,9 @@ android {
 dependencies {
     implementation(libs.appcompat)
     implementation(libs.material)
+
+    implementation("com.mapbox.maps:android-ndk27:11.31.1")
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)
