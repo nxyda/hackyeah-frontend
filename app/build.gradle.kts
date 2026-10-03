@@ -64,6 +64,12 @@ dependencies {
 
     implementation("com.mapbox.maps:android-ndk27:11.31.1")
 
+    implementation("com.mapbox.navigationcore:android-ndk27:3.31.1")
+    implementation("com.mapbox.navigationcore:ui-maps-ndk27:3.31.1")
+    implementation("com.mapbox.navigationcore:tripdata-ndk27:3.31.1")
+    implementation("com.mapbox.navigationcore:ui-components-ndk27:3.31.1")
+    implementation("com.mapbox.navigationcore:voice-ndk27:3.31.1")
+    implementation("com.google.android.gms:play-services-location:21.3.0")
     testImplementation(libs.junit)
     androidTestImplementation(libs.ext.junit)
     androidTestImplementation(libs.espresso.core)

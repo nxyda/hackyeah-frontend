@@ -5,11 +5,6 @@ import android.os.Bundle;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.fragment.app.Fragment;
 
-import com.example.saferoute.MapaFragment;
-import com.example.saferoute.UdostepnianieFragment;
-import com.example.saferoute.SosFragment;
-import com.example.saferoute.TelefonFragment;
-import com.example.saferoute.ProfilFragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {
@@ -22,11 +17,18 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
 
-        bottomNavigationView = findViewById(R.id.bottom_navigation);
+        bottomNavigationView =
+                findViewById(R.id.bottom_navigation);
 
         if (savedInstanceState == null) {
-            openFragment(new MapaFragment());
-            bottomNavigationView.setSelectedItemId(R.id.nav_map);
+
+            openFragment(
+                    new MapaFragment()
+            );
+
+            bottomNavigationView.setSelectedItemId(
+                    R.id.nav_map
+            );
         }
 
         bottomNavigationView.setOnItemSelectedListener(item -> {
@@ -34,21 +36,37 @@ public class MainActivity extends AppCompatActivity {
             int itemId = item.getItemId();
 
             if (itemId == R.id.nav_map) {
-                openFragment(new MapaFragment());
+
+                openFragment(
+                        new MapaFragment()
+                );
 
             } else if (itemId == R.id.nav_share) {
-                openFragment(new UdostepnianieFragment());
+
+                openFragment(
+                        new UdostepnianieFragment()
+                );
 
             } else if (itemId == R.id.nav_sos) {
-                openFragment(new SosFragment());
+
+                openFragment(
+                        new SosFragment()
+                );
 
             } else if (itemId == R.id.nav_phone) {
-                openFragment(new TelefonFragment());
+
+                openFragment(
+                        new TelefonFragment()
+                );
 
             } else if (itemId == R.id.nav_profile) {
-                openFragment(new ProfilFragment());
+
+                openFragment(
+                        new ProfilFragment()
+                );
 
             } else {
+
                 return false;
             }
 
@@ -57,6 +75,7 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void openFragment(Fragment fragment) {
+
         getSupportFragmentManager()
                 .beginTransaction()
                 .replace(
@@ -65,4 +84,5 @@ public class MainActivity extends AppCompatActivity {
                 )
                 .commit();
     }
+
 }
