@@ -18,6 +18,9 @@ import androidx.core.app.NotificationCompat;
 public class AnomalyDetector implements SensorEventListener {
 
     private final Context context;
+
+    // Flaga określająca, czy użytkownik jest aktualnie prowadzony po trasie
+    private boolean isNavigationActive = false;
     
     // Zmienne do detekcji postoju (GPS)
     private Location anchorLocation = null;
@@ -58,6 +61,7 @@ public class AnomalyDetector implements SensorEventListener {
     // ==========================================
     public void processNewLocation(Location location) {
         if (isAnomalyActive) return;
+        if (!isNavigationActive) return; // Zignoruj GPS, jeśli nawigacja jest wyłączona
 
         // Jeśli dokładność GPS jest dramatyczna (np. > 60m błędu w budynku), ignorujemy odczyt
         if (location.getAccuracy() > 60.0f) return;
@@ -88,6 +92,7 @@ public class AnomalyDetector implements SensorEventListener {
     @Override
     public void onSensorChanged(SensorEvent event) {
         if (isAnomalyActive) return;
+        if (!isNavigationActive) return; // Zignoruj czujniki ruchu, jeśli nawigacja jest wyłączona
 
         if (event.sensor.getType() == Sensor.TYPE_LINEAR_ACCELERATION) {
             float x = event.values[0];
@@ -152,6 +157,14 @@ public class AnomalyDetector implements SensorEventListener {
 
         // Odblokuj ponowne sprawdzanie anomalii po 15 sekundach
         new android.os.Handler(android.os.Looper.getMainLooper()).postDelayed(() -> isAnomalyActive = false, 15000);
+    }
+
+    public void setNavigationActive(boolean active) {
+        this.isNavigationActive = active;
+        // Gdy nawigacja zostaje wyłączona, upewnijmy się, że stoper postoju się zresetuje
+        if (!active) {
+            anchorLocation = null;
+        }
     }
 
     private void createNotificationChannel() {
