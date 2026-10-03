@@ -289,6 +289,58 @@ public class MapaFragment extends Fragment {
 
     private Button historicalThreatInfoClose;
 
+    private boolean cityEventsLayerEnabled = true;
+
+    private PointAnnotationManager cityEventAnnotationManager;
+
+    private Map<String, CityEvent> cityEventMap = new HashMap<>();
+
+    private LinearLayout cityEventInfoPanel;
+    private TextView cityEventInfoTitle;
+    private TextView cityEventInfoCategory;
+    private TextView cityEventInfoDescription;
+    private TextView cityEventInfoDate;
+    private TextView cityEventInfoRisk;
+    private Button cityEventInfoClose;
+
+    private static class CityEvent {
+
+        String title;
+        String description;
+        String category;
+
+        String startsAt;
+        String endsAt;
+
+        double latitude;
+        double longitude;
+
+        double radiusMeters;
+        double riskIncrease;
+
+        CityEvent(
+                String title,
+                String description,
+                String category,
+                String startsAt,
+                String endsAt,
+                double latitude,
+                double longitude,
+                double radiusMeters,
+                double riskIncrease
+        ) {
+            this.title = title;
+            this.description = description;
+            this.category = category;
+            this.startsAt = startsAt;
+            this.endsAt = endsAt;
+            this.latitude = latitude;
+            this.longitude = longitude;
+            this.radiusMeters = radiusMeters;
+            this.riskIncrease = riskIncrease;
+        }
+    }
+
 
     private static class HistoricalThreat {
 
@@ -822,6 +874,31 @@ public class MapaFragment extends Fragment {
                         R.id.safe_point_info_close
                 );
 
+        cityEventInfoPanel =
+                view.findViewById(R.id.city_event_info_panel);
+
+        cityEventInfoTitle =
+                view.findViewById(R.id.city_event_info_title);
+
+        cityEventInfoCategory =
+                view.findViewById(R.id.city_event_info_category);
+
+        cityEventInfoDescription =
+                view.findViewById(R.id.city_event_info_description);
+
+        cityEventInfoDate =
+                view.findViewById(R.id.city_event_info_date);
+
+        cityEventInfoRisk =
+                view.findViewById(R.id.city_event_info_risk);
+
+        cityEventInfoClose =
+                view.findViewById(R.id.city_event_info_close);
+
+        cityEventInfoClose.setOnClickListener(
+                v -> cityEventInfoPanel.setVisibility(View.GONE)
+        );
+
         safePointInfoClose.setOnClickListener(
                 v -> safePointInfoPanel.setVisibility(
                         View.GONE
@@ -878,6 +955,11 @@ public class MapaFragment extends Fragment {
                 View.GONE
         );
 
+        Button layerCityEvents =
+                view.findViewById(
+                        R.id.layer_city_events
+                );
+
         // =====================================================
         // MAPBOX STYLE
         // =====================================================
@@ -921,6 +1003,8 @@ public class MapaFragment extends Fragment {
                             updateSafePointMarkers();
 
                             updateHistoricalThreatMarkers();
+
+                            updateCityEventMarkers();
                         }
                 );
 
@@ -1194,6 +1278,19 @@ public class MapaFragment extends Fragment {
                             (boolean) layerUserReports.getTag();
 
                     updateReportLayerVisibility();
+                }
+        );
+
+        setupLayerButton(
+                layerCityEvents,
+                "🏟",
+                "🏟",
+                () -> {
+
+                    cityEventsLayerEnabled =
+                            (boolean) layerCityEvents.getTag();
+
+                    updateCityEventLayerVisibility();
                 }
         );
 
@@ -4158,5 +4255,221 @@ public class MapaFragment extends Fragment {
         dialog.setView(layout);
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
         dialog.show();
+    }
+
+    private List<CityEvent> getExampleCityEvents() {
+
+        double arenaLat = 50.0670;
+        double arenaLon = 19.9934;
+
+        List<CityEvent> events = new ArrayList<>();
+
+        events.add(new CityEvent(
+                "Wielki mecz piłkarski",
+                "Duże wydarzenie sportowe. Możliwe zwiększone natężenie ruchu oraz ryzyko incydentów.",
+                "Mecz sportowy",
+                "2026-10-12 18:00",
+                "2026-10-12 22:30",
+                arenaLat,
+                arenaLon,
+                1500,
+                0.25
+        ));
+
+        return events;
+    }
+
+    private Bitmap getCityEventBitmap() {
+
+        int width = 100;
+        int height = 100;
+
+        Bitmap bitmap =
+                Bitmap.createBitmap(
+                        width,
+                        height,
+                        Bitmap.Config.ARGB_8888
+                );
+
+        Canvas canvas = new Canvas(bitmap);
+
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        paint.setColor(
+                android.graphics.Color.rgb(156, 39, 176)
+        );
+
+        canvas.drawCircle(
+                width / 2f,
+                height / 2f,
+                42,
+                paint
+        );
+
+        paint.setColor(android.graphics.Color.WHITE);
+        paint.setTextSize(48);
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setTypeface(Typeface.DEFAULT_BOLD);
+
+        canvas.drawText(
+                "!",
+                width / 2f,
+                67,
+                paint
+        );
+
+        return bitmap;
+    }
+
+    private void updateCityEventMarkers() {
+
+        if (mapView == null) {
+            return;
+        }
+
+        AnnotationPlugin annotationPlugin =
+                mapView.getPlugin(
+                        Plugin.MAPBOX_ANNOTATION_PLUGIN_ID
+                );
+
+        if (annotationPlugin == null) {
+            return;
+        }
+
+        if (cityEventAnnotationManager == null) {
+
+            cityEventAnnotationManager =
+                    (PointAnnotationManager)
+                            annotationPlugin.createAnnotationManager(
+                                    AnnotationType.PointAnnotation,
+                                    new AnnotationConfig()
+                            );
+
+        } else {
+
+            cityEventAnnotationManager.deleteAll();
+        }
+
+        cityEventMap.clear();
+
+        Bitmap eventBitmap =
+                getCityEventBitmap();
+
+        if (eventBitmap == null) {
+            return;
+        }
+
+        List<CityEvent> events =
+                getExampleCityEvents();
+
+        for (CityEvent event : events) {
+
+            PointAnnotationOptions options =
+                    new PointAnnotationOptions()
+                            .withPoint(
+                                    Point.fromLngLat(
+                                            event.longitude,
+                                            event.latitude
+                                    )
+                            )
+                            .withIconImage(eventBitmap)
+                            .withIconSize(0.7);
+
+            PointAnnotation annotation =
+                    cityEventAnnotationManager.create(
+                            options
+                    );
+
+            cityEventMap.put(
+                    annotation.getId(),
+                    event
+            );
+        }
+
+        cityEventAnnotationManager.addClickListener(
+                annotation -> {
+
+                    CityEvent event =
+                            cityEventMap.get(
+                                    annotation.getId()
+                            );
+
+                    if (event != null) {
+                        showCityEventInfo(event);
+                    }
+
+                    return true;
+                }
+        );
+
+        updateCityEventLayerVisibility();
+    }
+
+    private void showCityEventInfo(
+            CityEvent event
+    ) {
+
+        if (safePointInfoPanel != null) {
+            safePointInfoPanel.setVisibility(
+                    View.GONE
+            );
+        }
+
+        if (reportInfoPanel != null) {
+            reportInfoPanel.setVisibility(
+                    View.GONE
+            );
+        }
+
+        if (historicalThreatInfoPanel != null) {
+            historicalThreatInfoPanel.setVisibility(
+                    View.GONE
+            );
+        }
+
+        cityEventInfoTitle.setText(
+                "🏟️ " + event.title
+        );
+
+        cityEventInfoCategory.setText(
+                "Kategoria: " + event.category
+        );
+
+        cityEventInfoDescription.setText(
+                event.description
+        );
+
+        cityEventInfoDate.setText(
+                "📅 " + event.startsAt
+                        + " – "
+                        + event.endsAt
+        );
+
+        cityEventInfoRisk.setText(
+                "⚠️ Wpływ na bezpieczeństwo: +"
+                        + String.format(
+                        Locale.US,
+                        "%.0f",
+                        event.riskIncrease * 100
+                )
+                        + "%"
+        );
+
+        cityEventInfoPanel.setVisibility(
+                View.VISIBLE
+        );
+    }
+
+    private void updateCityEventLayerVisibility() {
+
+        if (cityEventAnnotationManager == null) {
+            return;
+        }
+
+        cityEventAnnotationManager.setIconOpacity(
+                cityEventsLayerEnabled
+                        ? 1.0
+                        : 0.0
+        );
     }
 }
