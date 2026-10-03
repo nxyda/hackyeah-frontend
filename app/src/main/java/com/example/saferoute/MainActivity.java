@@ -3,13 +3,18 @@ package com.example.saferoute;
 import android.os.Bundle;
 
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.Fragment;
 
-import com.mapbox.maps.MapView;
-import com.mapbox.maps.Style;
+import com.example.saferoute.MapaFragment;
+import com.example.saferoute.UdostepnianieFragment;
+import com.example.saferoute.SosFragment;
+import com.example.saferoute.TelefonFragment;
+import com.example.saferoute.ProfilFragment;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
 
 public class MainActivity extends AppCompatActivity {
 
-    private MapView mapView;
+    private BottomNavigationView bottomNavigationView;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -17,34 +22,47 @@ public class MainActivity extends AppCompatActivity {
 
         setContentView(R.layout.activity_main);
 
-        mapView = findViewById(R.id.mapView);
+        bottomNavigationView = findViewById(R.id.bottom_navigation);
 
-        mapView.getMapboxMap().loadStyleUri(
-                Style.MAPBOX_STREETS
-        );
+        if (savedInstanceState == null) {
+            openFragment(new MapaFragment());
+            bottomNavigationView.setSelectedItemId(R.id.nav_map);
+        }
+
+        bottomNavigationView.setOnItemSelectedListener(item -> {
+
+            int itemId = item.getItemId();
+
+            if (itemId == R.id.nav_map) {
+                openFragment(new MapaFragment());
+
+            } else if (itemId == R.id.nav_share) {
+                openFragment(new UdostepnianieFragment());
+
+            } else if (itemId == R.id.nav_sos) {
+                openFragment(new SosFragment());
+
+            } else if (itemId == R.id.nav_phone) {
+                openFragment(new TelefonFragment());
+
+            } else if (itemId == R.id.nav_profile) {
+                openFragment(new ProfilFragment());
+
+            } else {
+                return false;
+            }
+
+            return true;
+        });
     }
 
-    @Override
-    protected void onStart() {
-        super.onStart();
-        mapView.onStart();
-    }
-
-    @Override
-    protected void onStop() {
-        super.onStop();
-        mapView.onStop();
-    }
-
-    @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        mapView.onDestroy();
-    }
-
-    @Override
-    public void onLowMemory() {
-        super.onLowMemory();
-        mapView.onLowMemory();
+    private void openFragment(Fragment fragment) {
+        getSupportFragmentManager()
+                .beginTransaction()
+                .replace(
+                        R.id.fragment_container,
+                        fragment
+                )
+                .commit();
     }
 }
