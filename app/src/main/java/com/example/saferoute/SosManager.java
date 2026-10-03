@@ -1,7 +1,11 @@
 package com.example.saferoute;
 
+import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Handler;
@@ -12,6 +16,8 @@ import android.telephony.SmsManager;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Toast;
+
+import androidx.core.content.ContextCompat;
 
 public class SosManager {
 
@@ -90,23 +96,48 @@ public class SosManager {
     private void notifyEmergencyContacts() {
         android.content.SharedPreferences prefs = context.getSharedPreferences("SafeRoutePrefs", Context.MODE_PRIVATE);
         
-        // Pobierz ustawioną bazową wiadomość (limit 100 znaków) i dodaj mapę
-        String baseMsg = prefs.getString("sos_msg", "POMOCY! Uzyto SOS.");
-        String finalMessage = baseMsg + " https://maps.google.com/?q=50.06143,19.93658";
+        // 1. Pobranie dynamicznej lokalizacji
+        String locationLink = "https://maps.google.com/?q=50.06143,19.93658"; // Domyślna (fallback)
+        
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            LocationManager locationManager = (LocationManager) context.getSystemService(Context.LOCATION_SERVICE);
+            if (locationManager != null) {
+                // Próbujemy pobrać z GPS
+                Location location = locationManager.getLastKnownLocation(LocationManager.GPS_PROVIDER);
+                // Jeśli GPS jeszcze nie złapał, próbujemy z sieci komórkowej/WiFi
+                if (location == null) {
+                    location = locationManager.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
+                }
+                
+                // Jeśli udało się pobrać, podmieniamy link
+                if (location != null) {
+                    locationLink = "https://maps.google.com/?q=" + location.getLatitude() + "," + location.getLongitude();
+                }
+            }
+        }
 
+        // 2. Budowanie wiadomości
+        String baseMsg = prefs.getString("sos_msg", "POMOCY! Uzyto SOS.");
+        String finalMessage = baseMsg + " " + locationLink;
+
+        // 3. Wysyłanie SMS do wszystkich zapisanych numerów
         try {
             android.telephony.SmsManager smsManager = android.telephony.SmsManager.getDefault();
             
-            // Pętla pobierająca 5 kluczy i wysyłająca SMS na te, które nie są puste
+            int sentCount = 0;
             for (int i = 1; i <= 5; i++) {
                 String number = prefs.getString("sos_num_" + i, "");
                 if (!number.isEmpty()) {
                     smsManager.sendTextMessage(number, null, finalMessage, null, null);
+                    sentCount++;
                 }
             }
-            Toast.makeText(context, "Wysłano SMS ratunkowy do zapisanych bliskich!", Toast.LENGTH_SHORT).show();
+            
+            if (sentCount > 0) {
+                Toast.makeText(context, "Wysłano SMS ratunkowy z lokalizacją do " + sentCount + " kontaktów!", Toast.LENGTH_SHORT).show();
+            }
         } catch (Exception e) {
-            Toast.makeText(context, "Błąd wysyłania SMS. Brak środków lub uprawnień.", Toast.LENGTH_LONG).show();
+            Toast.makeText(context, "Błąd wysyłania SMS.", Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }
