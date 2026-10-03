@@ -104,6 +104,16 @@ public class MapaFragment extends Fragment {
 
     private Button addReportButton;
 
+    private Button layersButton;
+    private Button layerClose;
+    private LinearLayout layersPanel;
+
+    private Button layerLighting;
+    private Button layerSafePoints;
+    private Button layerCameras;
+    private Button layerHistorical;
+    private Button layerUserReports;
+
     // =========================================================
     // LOKALIZACJA
     // =========================================================
@@ -197,6 +207,13 @@ public class MapaFragment extends Fragment {
     private int currentReportConfirmations = 4;
 
     private boolean currentReportConfirmed = false;
+
+    private boolean lightingLayerEnabled = true;
+    private boolean safePointsLayerEnabled = true;
+    private boolean camerasLayerEnabled = true;
+    private boolean historicalLayerEnabled = true;
+    private boolean userReportsLayerEnabled = true;
+
 
     // =========================================================
     // MODEL ZGŁOSZENIA
@@ -445,6 +462,65 @@ public class MapaFragment extends Fragment {
                 view.findViewById(
                         R.id.add_report_button
                 );
+
+        layersButton =
+                view.findViewById(
+                        R.id.layers_button
+                );
+
+        layerClose =
+                view.findViewById(
+                        R.id.layer_close);
+
+        layersPanel =
+                view.findViewById(
+                        R.id.layers_panel
+                );
+
+        layerLighting =
+                view.findViewById(
+                        R.id.layer_lighting
+                );
+
+        layerSafePoints =
+                view.findViewById(
+                        R.id.layer_safe_points
+                );
+
+        layerCameras =
+                view.findViewById(
+                        R.id.layer_cameras
+                );
+
+        layerHistorical =
+                view.findViewById(
+                        R.id.layer_historical
+                );
+
+        layerUserReports =
+                view.findViewById(
+                        R.id.layer_user_reports
+                );
+
+        layersButton.setOnClickListener(v -> {
+
+            if (layersPanel.getVisibility() == View.VISIBLE) {
+
+                layersPanel.setVisibility(
+                        View.GONE
+                );
+
+            } else {
+
+                layersPanel.setVisibility(
+                        View.VISIBLE
+                );
+            }
+        });
+
+        layerClose.setOnClickListener(v -> {
+            layersPanel.setVisibility(View.GONE);
+        });
 
         navigationStepsPanel =
                 view.findViewById(
@@ -880,6 +956,63 @@ public class MapaFragment extends Fragment {
             );
         });
 
+        setupLayerButton(
+                layerLighting,
+                "💡\nŚwiatło ✓",
+                "💡\nŚwiatło",
+                () -> {
+                    lightingLayerEnabled =
+                            (boolean) layerLighting.getTag();
+
+                    // tutaj później pokażemy/ukryjemy
+                    // warstwę natężenia światła
+                }
+        );
+
+        setupLayerButton(
+                layerSafePoints,
+                "🛡\nBezpieczne\npunkty ✓",
+                "🛡\nBezpieczne\npunkty",
+                () -> {
+                    safePointsLayerEnabled =
+                            (boolean) layerSafePoints.getTag();
+                }
+        );
+
+        setupLayerButton(
+                layerCameras,
+                "📷\nKamery ✓",
+                "📷\nKamery",
+                () -> {
+                    camerasLayerEnabled =
+                            (boolean) layerCameras.getTag();
+                }
+        );
+
+        setupLayerButton(
+                layerHistorical,
+                "🕰\nHistoryczne\nzagrożenia ✓",
+                "🕰\nHistoryczne\nzagrożenia",
+                () -> {
+                    historicalLayerEnabled =
+                            (boolean) layerHistorical.getTag();
+                }
+        );
+
+        setupLayerButton(
+                layerUserReports,
+                "🚨\nZgłoszenia\nużytkowników ✓",
+                "🚨\nZgłoszenia\nużytkowników",
+                () -> {
+
+                    userReportsLayerEnabled =
+                            (boolean) layerUserReports.getTag();
+
+                    updateReportLayerVisibility();
+                }
+        );
+
+
         return view;
     }
 
@@ -1219,6 +1352,16 @@ public class MapaFragment extends Fragment {
                     style.addStyleLayer(
                             layerExpected.getValue(),
                             null
+                    );
+
+                    style.setStyleLayerProperty(
+                            REPORT_LAYER_ID,
+                            "visibility",
+                            Value.valueOf(
+                                    userReportsLayerEnabled
+                                            ? "visible"
+                                            : "none"
+                            )
                     );
                 }
         );
@@ -2023,8 +2166,16 @@ public class MapaFragment extends Fragment {
             return;
         }
 
+        if (currentNavigationStepIndex >=
+                currentNavigationSteps.size()) {
+
+            return;
+        }
+
         NavigationStep currentStep =
-                currentNavigationSteps.get(0);
+                currentNavigationSteps.get(
+                        currentNavigationStepIndex
+                );
 
         navigationCurrentIcon.setText(
                 getNavigationIcon(
@@ -2436,6 +2587,57 @@ public class MapaFragment extends Fragment {
         );
 
         updateNavigationPanel();
+    }
+
+    private void setupLayerButton(
+            Button button,
+            String enabledText,
+            String disabledText,
+            Runnable onToggle
+    ) {
+
+        button.setOnClickListener(v -> {
+
+            boolean enabled =
+                    button.getTag() == null
+                            || (boolean) button.getTag();
+
+            enabled = !enabled;
+
+            button.setTag(enabled);
+
+            button.setText(
+                    enabled
+                            ? enabledText
+                            : disabledText
+            );
+
+            onToggle.run();
+        });
+
+        button.setTag(true);
+    }
+
+    private void updateReportLayerVisibility() {
+        if (mapView == null) return;
+
+        try {
+            mapView.getMapboxMap().getStyle(style -> {
+
+                style.setStyleLayerProperty(
+                        REPORT_LAYER_ID,
+                        "visibility",
+                        Value.valueOf(
+                                userReportsLayerEnabled
+                                        ? "visible"
+                                        : "none"
+                        )
+                );
+
+            });
+
+        } catch (Exception ignored) {
+        }
     }
 
 }
