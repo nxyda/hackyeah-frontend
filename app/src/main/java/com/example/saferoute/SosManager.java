@@ -88,26 +88,25 @@ public class SosManager {
     }
 
     private void notifyEmergencyContacts() {
-        // Dzięki temu na prezentacji przed jury faktycznie pokażecie, że SMS przyszedł.
-        String[] emergencyContacts = {"514157266", "693300172"}; 
+        android.content.SharedPreferences prefs = context.getSharedPreferences("SafeRoutePrefs", Context.MODE_PRIVATE);
         
-        // Mockowana lokalizacja (współrzędne centrum). 
-        // Docelowo współrzędne można pobierać z Mapboxa/GPS telefonu.
-        String message = "POZDRO!";
+        // Pobierz ustawioną bazową wiadomość (limit 100 znaków) i dodaj mapę
+        String baseMsg = prefs.getString("sos_msg", "POMOCY! Uzyto SOS.");
+        String finalMessage = baseMsg + " https://maps.google.com/?q=50.06143,19.93658";
 
         try {
-            // Pobranie domyślnego managera SMS w Androidzie
-            SmsManager smsManager = SmsManager.getDefault();
+            android.telephony.SmsManager smsManager = android.telephony.SmsManager.getDefault();
             
-            // Wysłanie wiadomości do wszystkich numerów z listy
-            for (String number : emergencyContacts) {
-                // sendTextMessage(numer_docelowy, numer_centrum_sms (null=domyślny), treść, intent_wysłania, intent_dostarczenia)
-                smsManager.sendTextMessage(number, null, message, null, null);
+            // Pętla pobierająca 5 kluczy i wysyłająca SMS na te, które nie są puste
+            for (int i = 1; i <= 5; i++) {
+                String number = prefs.getString("sos_num_" + i, "");
+                if (!number.isEmpty()) {
+                    smsManager.sendTextMessage(number, null, finalMessage, null, null);
+                }
             }
-            Toast.makeText(context, "Wysłano SMS ratunkowy do bliskich!", Toast.LENGTH_SHORT).show();
+            Toast.makeText(context, "Wysłano SMS ratunkowy do zapisanych bliskich!", Toast.LENGTH_SHORT).show();
         } catch (Exception e) {
-            // Jeśli użytkownik nie dał uprawnień lub nie ma karty SIM, wyłapujemy błąd żeby aplikacja nie wyłączyła się (crash)
-            Toast.makeText(context, "Błąd SMS. Brak uprawnień lub karty SIM?", Toast.LENGTH_LONG).show();
+            Toast.makeText(context, "Błąd wysyłania SMS. Brak środków lub uprawnień.", Toast.LENGTH_LONG).show();
             e.printStackTrace();
         }
     }

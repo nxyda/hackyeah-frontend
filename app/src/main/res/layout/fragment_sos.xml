@@ -34,7 +34,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="16dp"
-        android:text="Aktywacja natychmiast zadzwoni pod 112\ni udostępni Twoją lokalizację bliskim."
+        android:text="Aktywacja natychmiast zadzwoni pod 112\ni wyśle SMS-a z lokalizacją na numery zapisane w profilu."
         android:textAlignment="center"
         android:textSize="14sp"
         android:textColor="#777777" />
