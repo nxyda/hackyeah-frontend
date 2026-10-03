@@ -126,7 +126,20 @@
             android:orientation="vertical"
             android:visibility="gone" />
 
+        <!-- PODSUMOWANIE TRASY -->
+        <TextView
+            android:id="@+id/navigation_route_summary"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:paddingStart="16dp"
+            android:paddingTop="8dp"
+            android:paddingEnd="16dp"
+            android:paddingBottom="10dp"
+            android:text="🛡 Bezpieczna  •  2,4 km  •  9 min"
+            android:textSize="13sp" />
+
     </LinearLayout>
+
 
     <com.google.android.material.button.MaterialButton
         android:id="@+id/add_report_button"
@@ -149,31 +162,34 @@
 
     <LinearLayout
         android:id="@+id/report_info_panel"
-        android:layout_width="260dp"
+        android:layout_width="300dp"
         android:layout_height="wrap_content"
         android:layout_gravity="center"
         android:orientation="vertical"
-        android:padding="14dp"
+        android:padding="16dp"
         android:background="@drawable/report_info_background"
         android:elevation="12dp"
         android:visibility="gone">
 
+        <!-- TYTUŁ -->
         <TextView
             android:id="@+id/report_info_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Zgłoszenie"
-            android:textSize="17sp"
+            android:text="⚠️ Zgłoszone zagrożenie"
+            android:textSize="18sp"
             android:textStyle="bold" />
 
+        <!-- KATEGORIA -->
         <TextView
             android:id="@+id/report_info_category"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="10dp"
             android:text="Kategoria:"
             android:textSize="14sp" />
 
+        <!-- CZAS -->
         <TextView
             android:id="@+id/report_info_time"
             android:layout_width="match_parent"
@@ -182,20 +198,70 @@
             android:text="Godzina:"
             android:textSize="14sp" />
 
+        <!-- POTWIERDZENIA -->
+        <TextView
+            android:id="@+id/report_info_confirmations"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="👥 Potwierdzone przez 4 osoby"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- PYTANIE -->
+        <TextView
+            android:id="@+id/report_info_question"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Czy nadal występuje tutaj zagrożenie?"
+            android:textSize="14sp" />
+
+        <!-- PRZYCISKI -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:orientation="horizontal">
+
+            <Button
+                android:id="@+id/report_info_confirm"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="4dp"
+                android:text="👍"
+                android:textAllCaps="false"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/report_info_invalid"
+                android:layout_width="0dp"
+                android:layout_height="48dp"
+                android:layout_weight="1"
+                android:layout_marginStart="4dp"
+                android:text="👎"
+                android:textAllCaps="false"
+                android:textSize="13sp" />
+
+        </LinearLayout>
+
+        <!-- ID -->
         <TextView
             android:id="@+id/report_info_id"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
+            android:layout_marginTop="8dp"
             android:text="ID:"
-            android:textSize="11sp" />
+            android:textSize="10sp" />
 
+        <!-- ZAMKNIJ -->
         <Button
             android:id="@+id/report_info_close"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:layout_gravity="end"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="4dp"
             android:text="Zamknij"
             android:textAllCaps="false" />
 
