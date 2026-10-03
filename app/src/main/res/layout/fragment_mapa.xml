@@ -10,7 +10,8 @@
         android:id="@+id/mapView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:mapbox_locationComponentEnabled="true" />
+        app:mapbox_locationComponentEnabled="true"
+        app:mapbox_compassEnabled="false" />
 
     <!-- WYSZUKIWANIE -->
     <LinearLayout
@@ -449,6 +450,147 @@
         android:elevation="8dp"
         app:cornerRadius="28dp"
         app:backgroundTint="#F44336" />
+
+    <!-- INFORMACJE O BEZPIECZNYM PUNKCIE -->
+    <LinearLayout
+        android:id="@+id/safe_point_info_panel"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/report_info_background"
+        android:elevation="12dp"
+        android:visibility="gone">
+
+        <!-- TYTUŁ -->
+        <TextView
+            android:id="@+id/safe_point_info_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🛡 Bezpieczny punkt"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- NAZWA -->
+        <TextView
+            android:id="@+id/safe_point_info_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Nazwa:"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <!-- KATEGORIA -->
+        <TextView
+            android:id="@+id/safe_point_info_category"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Kategoria:"
+            android:textSize="14sp" />
+
+        <!-- GODZINY -->
+        <TextView
+            android:id="@+id/safe_point_info_hours"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Godziny:"
+            android:textSize="14sp" />
+
+        <!-- 24/7 -->
+        <TextView
+            android:id="@+id/safe_point_info_247"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="🕐 Czynne 24/7"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- ZAMKNIJ -->
+        <Button
+            android:id="@+id/safe_point_info_close"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="10dp"
+            android:text="Zamknij"
+            android:textAllCaps="false" />
+
+    </LinearLayout>
+
+    <!-- INFORMACJE O HISTORYCZNYM ZAGROŻENIU -->
+    <LinearLayout
+        android:id="@+id/historical_threat_info_panel"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/report_info_background"
+        android:elevation="12dp"
+        android:visibility="gone">
+
+        <!-- TYTUŁ -->
+        <TextView
+            android:id="@+id/historical_threat_info_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⚠️ Historyczne zagrożenie"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- KATEGORIA -->
+        <TextView
+            android:id="@+id/historical_threat_info_category"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Kategoria:"
+            android:textSize="14sp" />
+
+        <!-- DATA -->
+        <TextView
+            android:id="@+id/historical_threat_info_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Data:"
+            android:textSize="14sp" />
+
+        <!-- POZIOM ZAGROŻENIA -->
+        <TextView
+            android:id="@+id/historical_threat_info_severity"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="🔴 Poziom zagrożenia:"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- WARTOŚĆ SEVERITY -->
+        <TextView
+            android:id="@+id/historical_threat_info_score"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Severity: 0.85"
+            android:textSize="13sp" />
+
+        <!-- ZAMKNIJ -->
+        <Button
+            android:id="@+id/historical_threat_info_close"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="10dp"
+            android:text="Zamknij"
+            android:textAllCaps="false" />
+
+    </LinearLayout>
 
     <!-- INFORMACJE O ZGŁOSZENIU -->
     <LinearLayout
