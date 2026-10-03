@@ -15,6 +15,7 @@ import com.example.saferoute.SosFragment;
 import com.example.saferoute.TelefonFragment;
 import com.example.saferoute.ProfilFragment;
 import com.google.android.material.bottomnavigation.BottomNavigationView;
+import android.telephony.SmsManager;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -66,7 +67,8 @@ public class MainActivity extends AppCompatActivity {
     private void checkAndRequestPermissions() {
         String[] permissions = {
                 Manifest.permission.CALL_PHONE,
-                Manifest.permission.ACCESS_FINE_LOCATION
+                Manifest.permission.ACCESS_FINE_LOCATION,
+                Manifest.permission.SEND_SMS
         };
 
         boolean needsRequest = false;

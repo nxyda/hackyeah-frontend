@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.os.VibrationEffect;
 import android.os.Vibrator;
+import android.telephony.SmsManager;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Toast;
@@ -59,19 +60,15 @@ public class SosManager {
         vibrate(1000);
         Toast.makeText(context, "SOS AKTYWOWANE!", Toast.LENGTH_LONG).show();
 
-        // 1. Zadzwoń od razu
-        makeEmergencyCall("514157266");
-
-        // 2. Czarna skrzynka
         startBlackBoxRecording();
 
-        // 3. Udostępnianie lokalizacji bliskim (Placeholder)
         notifyEmergencyContacts();
 
-        // 4. Nawigacja ucieczki
         if (callback != null) {
             callback.onRouteToSafeHavenRequested();
         }
+
+        makeEmergencyCall("514157266");
     }
 
     private void makeEmergencyCall(String phoneNumber) {
@@ -91,8 +88,28 @@ public class SosManager {
     }
 
     private void notifyEmergencyContacts() {
-        // TODO: Placeholder - tu w przyszłości dodasz logikę pobierania kontaktów z Supabase i wysyłania do nich pusha lub SMSa z linkiem do Live Location
-        Toast.makeText(context, "Powiadamianie bliskich: Wysłano alert z lokalizacją", Toast.LENGTH_SHORT).show();
+        // Dzięki temu na prezentacji przed jury faktycznie pokażecie, że SMS przyszedł.
+        String[] emergencyContacts = {"514157266", "693300172"}; 
+        
+        // Mockowana lokalizacja (współrzędne centrum). 
+        // Docelowo współrzędne można pobierać z Mapboxa/GPS telefonu.
+        String message = "POZDRO!";
+
+        try {
+            // Pobranie domyślnego managera SMS w Androidzie
+            SmsManager smsManager = SmsManager.getDefault();
+            
+            // Wysłanie wiadomości do wszystkich numerów z listy
+            for (String number : emergencyContacts) {
+                // sendTextMessage(numer_docelowy, numer_centrum_sms (null=domyślny), treść, intent_wysłania, intent_dostarczenia)
+                smsManager.sendTextMessage(number, null, message, null, null);
+            }
+            Toast.makeText(context, "Wysłano SMS ratunkowy do bliskich!", Toast.LENGTH_SHORT).show();
+        } catch (Exception e) {
+            // Jeśli użytkownik nie dał uprawnień lub nie ma karty SIM, wyłapujemy błąd żeby aplikacja nie wyłączyła się (crash)
+            Toast.makeText(context, "Błąd SMS. Brak uprawnień lub karty SIM?", Toast.LENGTH_LONG).show();
+            e.printStackTrace();
+        }
     }
 
     // Naprawiony błąd z wibracjami (kompatybilność ze starszymi Androidami)
