@@ -66,6 +66,7 @@ public class MapaFragment extends Fragment {
 
     private EditText searchDestination;
     private Button searchButton;
+    private ImageButton btnSavedPlaces;
 
     // =========================================================
     // TRASY
@@ -385,6 +386,9 @@ public class MapaFragment extends Fragment {
                 view.findViewById(
                         R.id.search_button
                 );
+
+        btnSavedPlaces = view.findViewById(R.id.btn_saved_places);
+        btnSavedPlaces.setOnClickListener(v -> showSavedPlacesMenu());
 
         // =====================================================
         // LOKALIZACJA
@@ -1667,5 +1671,345 @@ public class MapaFragment extends Fragment {
         mapView = null;
 
         super.onDestroyView();
+    }
+
+    // =========================================================
+    // DYNAMICZNE MENU ZAPISANYCH MIEJSC (ELEGANCKIE UI)
+    // =========================================================
+
+    private void showSavedPlacesMenu() {
+        android.content.SharedPreferences prefs = requireActivity().getSharedPreferences("SafeRoutePrefs", android.content.Context.MODE_PRIVATE);
+        // Puste na start, zero zahardcodowanych miejsc
+        String savedData = prefs.getString("saved_places", ""); 
+
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        AlertDialog dialog = builder.create();
+
+        // Główny kontener dialogu z zaokrąglonymi rogami
+        LinearLayout container = new LinearLayout(requireContext());
+        container.setOrientation(LinearLayout.VERTICAL);
+        container.setPadding(60, 60, 60, 60);
+        
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(android.graphics.Color.parseColor("#1E1E1E")); // Ciemnoszary panel
+        bg.setCornerRadius(40f); // Mocne zaokrąglenie
+        container.setBackground(bg);
+
+        // Tytuł
+        TextView title = new TextView(requireContext());
+        title.setText("Twoje Miejsca");
+        title.setTextColor(android.graphics.Color.WHITE);
+        title.setTextSize(22);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setPadding(0, 0, 0, 40);
+        container.addView(title);
+
+        // Lista miejsc (przewijana)
+        android.widget.ScrollView scrollView = new android.widget.ScrollView(requireContext());
+        LinearLayout listLayout = new LinearLayout(requireContext());
+        listLayout.setOrientation(LinearLayout.VERTICAL);
+        scrollView.addView(listLayout);
+
+        if (!savedData.isEmpty()) {
+            String[] entries = savedData.split("#");
+            for (int i = 0; i < entries.length; i++) {
+                String entry = entries[i];
+                String[] parts = entry.split("\\|");
+                if (parts.length == 2) {
+                    String name = parts[0];
+                    String address = parts[1];
+                    final int index = i;
+
+                    // Wiersz pojedynczego miejsca
+                    LinearLayout row = new LinearLayout(requireContext());
+                    row.setOrientation(LinearLayout.HORIZONTAL);
+                    row.setPadding(0, 20, 0, 20);
+                    row.setGravity(android.view.Gravity.CENTER_VERTICAL);
+
+                    // Klikalna sekcja tekstowa (Nazwa + Adres)
+                    LinearLayout textLayout = new LinearLayout(requireContext());
+                    textLayout.setOrientation(LinearLayout.VERTICAL);
+                    LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+                    textLayout.setLayoutParams(textParams);
+                    
+                    // Ripple effect po kliknięciu
+                    android.util.TypedValue outValue = new android.util.TypedValue();
+                    requireContext().getTheme().resolveAttribute(android.R.attr.selectableItemBackground, outValue, true);
+                    textLayout.setBackgroundResource(outValue.resourceId);
+                    textLayout.setClickable(true);
+                    textLayout.setFocusable(true);
+
+                    TextView tvName = new TextView(requireContext());
+                    tvName.setText("⭐ " + name);
+                    tvName.setTextColor(android.graphics.Color.WHITE);
+                    tvName.setTextSize(16);
+                    tvName.setTypeface(null, android.graphics.Typeface.BOLD);
+
+                    TextView tvAddress = new TextView(requireContext());
+                    tvAddress.setText(address);
+                    tvAddress.setTextColor(android.graphics.Color.parseColor("#AAAAAA"));
+                    tvAddress.setTextSize(13);
+                    tvAddress.setPadding(0, 4, 0, 0);
+
+                    textLayout.addView(tvName);
+                    textLayout.addView(tvAddress);
+
+                    // Mały, czerwony 'X' do usuwania
+                    TextView btnDelete = new TextView(requireContext());
+                    btnDelete.setText("✕");
+                    btnDelete.setTextColor(android.graphics.Color.parseColor("#F44336"));
+                    btnDelete.setTextSize(20);
+                    btnDelete.setTypeface(null, android.graphics.Typeface.BOLD);
+                    btnDelete.setPadding(30, 20, 10, 20);
+
+                    row.addView(textLayout);
+                    row.addView(btnDelete);
+
+                    // Logika kliknięć
+                    textLayout.setOnClickListener(v -> {
+                        searchDestination.setText(address);
+                        searchButton.performClick();
+                        dialog.dismiss();
+                    });
+
+                    btnDelete.setOnClickListener(v -> {
+                        dialog.dismiss();
+                        showDeleteConfirmation(name, index, savedData);
+                    });
+
+                    listLayout.addView(row);
+
+                    // Delikatna linia oddzielająca (poza ostatnim elementem)
+                    if (i < entries.length - 1) {
+                        View divider = new View(requireContext());
+                        divider.setLayoutParams(new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 2));
+                        divider.setBackgroundColor(android.graphics.Color.parseColor("#2C2C2C"));
+                        listLayout.addView(divider);
+                    }
+                }
+            }
+        } else {
+            TextView empty = new TextView(requireContext());
+            empty.setText("Brak zapisanych miejsc.\nKliknij przycisk poniżej, aby coś dodać.");
+            empty.setTextColor(android.graphics.Color.GRAY);
+            empty.setTextAlignment(View.TEXT_ALIGNMENT_CENTER);
+            empty.setPadding(0, 20, 0, 40);
+            listLayout.addView(empty);
+        }
+
+        // Ogranicz wysokość ScrollView, żeby ekran się nie rozjechał przy 20 miejscach
+        LinearLayout.LayoutParams scrollParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        scrollView.setLayoutParams(scrollParams);
+        container.addView(scrollView);
+
+        // Przycisk "Dodaj nowe miejsce"
+        Button btnAdd = new Button(requireContext());
+        btnAdd.setText("+ Dodaj nowe miejsce");
+        btnAdd.setBackgroundTintList(android.content.res.ColorStateList.valueOf(android.graphics.Color.parseColor("#4CAF50"))); // Zielony
+        btnAdd.setTextColor(android.graphics.Color.WHITE);
+        btnAdd.setAllCaps(false);
+        btnAdd.setTextSize(16);
+        
+        android.graphics.drawable.GradientDrawable btnBg = new android.graphics.drawable.GradientDrawable();
+        btnBg.setColor(android.graphics.Color.parseColor("#4CAF50"));
+        btnBg.setCornerRadius(20f);
+        btnAdd.setBackground(btnBg);
+
+        LinearLayout.LayoutParams btnParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, 140); // Grubszy przycisk
+        btnParams.setMargins(0, 50, 0, 0);
+        btnAdd.setLayoutParams(btnParams);
+        
+        btnAdd.setOnClickListener(v -> {
+            dialog.dismiss();
+            showAddPlaceDialog();
+        });
+
+        container.addView(btnAdd);
+
+        dialog.setView(container);
+        
+        // Ukrycie standardowego, kwadratowego tła Androida, żeby zaokrąglenia zadziałały
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        }
+        
+        dialog.show();
+    }
+
+    private void showAddPlaceDialog() {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        AlertDialog dialog = builder.create();
+
+        LinearLayout layout = new LinearLayout(requireContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(60, 60, 60, 60);
+
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(android.graphics.Color.parseColor("#1E1E1E"));
+        bg.setCornerRadius(40f);
+        layout.setBackground(bg);
+
+        TextView title = new TextView(requireContext());
+        title.setText("Nowe Miejsce");
+        title.setTextColor(android.graphics.Color.WHITE);
+        title.setTextSize(22);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        title.setPadding(0, 0, 0, 40);
+        layout.addView(title);
+
+        // Stylizowane pola tekstowe
+        android.graphics.drawable.GradientDrawable inputBg = new android.graphics.drawable.GradientDrawable();
+        inputBg.setColor(android.graphics.Color.parseColor("#2C2C2C"));
+        inputBg.setCornerRadius(20f);
+
+        final EditText nameInput = new EditText(requireContext());
+        nameInput.setHint("Nazwa (np. Dom chłopaka)");
+        nameInput.setHintTextColor(android.graphics.Color.parseColor("#888888"));
+        nameInput.setTextColor(android.graphics.Color.WHITE);
+        nameInput.setBackground(inputBg);
+        nameInput.setPadding(40, 40, 40, 40);
+        layout.addView(nameInput);
+
+        final EditText addressInput = new EditText(requireContext());
+        addressInput.setHint("Pełny adres (np. ul. Długa 5)");
+        addressInput.setHintTextColor(android.graphics.Color.parseColor("#888888"));
+        addressInput.setTextColor(android.graphics.Color.WHITE);
+        addressInput.setBackground(inputBg);
+        addressInput.setPadding(40, 40, 40, 40);
+        
+        LinearLayout.LayoutParams addressParams = new LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        addressParams.setMargins(0, 30, 0, 40);
+        addressInput.setLayoutParams(addressParams);
+        layout.addView(addressInput);
+
+        // Przyciski Zapisz / Anuluj
+        LinearLayout btnLayout = new LinearLayout(requireContext());
+        btnLayout.setOrientation(LinearLayout.HORIZONTAL);
+        btnLayout.setWeightSum(2);
+
+        Button btnCancel = new Button(requireContext());
+        btnCancel.setText("Anuluj");
+        btnCancel.setTextColor(android.graphics.Color.parseColor("#AAAAAA"));
+        btnCancel.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        btnCancel.setAllCaps(false);
+        LinearLayout.LayoutParams param1 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        btnCancel.setLayoutParams(param1);
+
+        Button btnSave = new Button(requireContext());
+        btnSave.setText("Zapisz");
+        btnSave.setTextColor(android.graphics.Color.parseColor("#4CAF50"));
+        btnSave.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        btnSave.setAllCaps(false);
+        btnSave.setTypeface(null, android.graphics.Typeface.BOLD);
+        LinearLayout.LayoutParams param2 = new LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f);
+        btnSave.setLayoutParams(param2);
+
+        btnLayout.addView(btnCancel);
+        btnLayout.addView(btnSave);
+        layout.addView(btnLayout);
+
+        // Akcje przycisków
+        btnCancel.setOnClickListener(v -> dialog.dismiss());
+
+        btnSave.setOnClickListener(v -> {
+            String name = nameInput.getText().toString().replace("|", "").replace("#", "").trim();
+            String address = addressInput.getText().toString().replace("|", "").replace("#", "").trim();
+
+            if (!name.isEmpty() && !address.isEmpty()) {
+                android.content.SharedPreferences prefs = requireActivity().getSharedPreferences("SafeRoutePrefs", android.content.Context.MODE_PRIVATE);
+                String currentData = prefs.getString("saved_places", "");
+                
+                String newData = currentData.isEmpty() ? name + "|" + address : currentData + "#" + name + "|" + address;
+                prefs.edit().putString("saved_places", newData).apply();
+                
+                Toast.makeText(getContext(), "Zapisano: " + name, Toast.LENGTH_SHORT).show();
+                dialog.dismiss();
+                showSavedPlacesMenu(); // Odśwież widok
+            } else {
+                Toast.makeText(getContext(), "Wypełnij obie wartości!", Toast.LENGTH_SHORT).show();
+            }
+        });
+
+        dialog.setView(layout);
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        dialog.show();
+    }
+
+    private void showDeleteConfirmation(String placeName, int indexToRemove, String currentData) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(requireContext());
+        AlertDialog dialog = builder.create();
+
+        LinearLayout layout = new LinearLayout(requireContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(60, 60, 60, 60);
+
+        android.graphics.drawable.GradientDrawable bg = new android.graphics.drawable.GradientDrawable();
+        bg.setColor(android.graphics.Color.parseColor("#1E1E1E"));
+        bg.setCornerRadius(40f);
+        layout.setBackground(bg);
+
+        TextView title = new TextView(requireContext());
+        title.setText("Usunąć miejsce?");
+        title.setTextColor(android.graphics.Color.WHITE);
+        title.setTextSize(20);
+        title.setTypeface(null, android.graphics.Typeface.BOLD);
+        layout.addView(title);
+
+        TextView message = new TextView(requireContext());
+        message.setText("Czy na pewno chcesz bezpowrotnie usunąć zakładkę '" + placeName + "'?");
+        message.setTextColor(android.graphics.Color.parseColor("#AAAAAA"));
+        message.setTextSize(14);
+        message.setPadding(0, 20, 0, 40);
+        layout.addView(message);
+
+        // Przyciski
+        LinearLayout btnLayout = new LinearLayout(requireContext());
+        btnLayout.setOrientation(LinearLayout.HORIZONTAL);
+        btnLayout.setGravity(android.view.Gravity.END);
+
+        Button btnCancel = new Button(requireContext());
+        btnCancel.setText("Anuluj");
+        btnCancel.setTextColor(android.graphics.Color.parseColor("#AAAAAA"));
+        btnCancel.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        btnCancel.setAllCaps(false);
+
+        Button btnDelete = new Button(requireContext());
+        btnDelete.setText("Usuń");
+        btnDelete.setTextColor(android.graphics.Color.parseColor("#F44336")); // Czerwony
+        btnDelete.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        btnDelete.setAllCaps(false);
+        btnDelete.setTypeface(null, android.graphics.Typeface.BOLD);
+
+        btnLayout.addView(btnCancel);
+        btnLayout.addView(btnDelete);
+        layout.addView(btnLayout);
+
+        btnCancel.setOnClickListener(v -> {
+            dialog.dismiss();
+            showSavedPlacesMenu(); // Wróć do menu
+        });
+
+        btnDelete.setOnClickListener(v -> {
+            String[] entries = currentData.split("#");
+            StringBuilder newData = new StringBuilder();
+            
+            for (int i = 0; i < entries.length; i++) {
+                if (i != indexToRemove) {
+                    if (newData.length() > 0) newData.append("#");
+                    newData.append(entries[i]);
+                }
+            }
+            
+            android.content.SharedPreferences prefs = requireActivity().getSharedPreferences("SafeRoutePrefs", android.content.Context.MODE_PRIVATE);
+            prefs.edit().putString("saved_places", newData.toString()).apply();
+            
+            Toast.makeText(getContext(), "Usunięto.", Toast.LENGTH_SHORT).show();
+            dialog.dismiss();
+            showSavedPlacesMenu(); // Otwórz odświeżoną listę
+        });
+
+        dialog.setView(layout);
+        if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+        dialog.show();
     }
 }
