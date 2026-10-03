@@ -62,7 +62,7 @@ public class SosManager {
         });
     }
 
-    private void triggerSosActions() {
+    public void triggerSosActions() {
         vibrate(1000);
         Toast.makeText(context, "SOS AKTYWOWANE!", Toast.LENGTH_LONG).show();
 

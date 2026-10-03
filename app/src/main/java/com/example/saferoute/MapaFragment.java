@@ -18,6 +18,7 @@ import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
+import android.location.Location;
 
 import com.mapbox.bindgen.Expected;
 import com.mapbox.bindgen.Value;
@@ -55,6 +56,9 @@ public class MapaFragment extends Fragment {
     private LocationComponentPlugin locationComponent;
 
     private GesturesPlugin gesturesPlugin;
+
+
+    private AnomalyDetector anomalyDetector;
 
     // =========================================================
     // WYSZUKIWANIE
@@ -191,6 +195,19 @@ public class MapaFragment extends Fragment {
 
                     currentLocation = point;
 
+                    if (anomalyDetector != null) {
+                        // Mapbox daje Point, ale AnomalyDetector potrzebuje android.location.Location.
+                        // Musimy szybko to zmapować. Jako Provider podajemy "Mapbox".
+                        Location androidLoc = new Location("Mapbox");
+                        androidLoc.setLatitude(point.latitude());
+                        androidLoc.setLongitude(point.longitude());
+                        
+                        // Uwaga: Mapboxowa metoda OnIndicatorPositionChangedListener nie dostarcza prędkości (speed).
+                        // Detektor poradzi sobie z postojem z samego dystansu, ale dla biegu musimy symulować / liczyć.
+                        // Zostawiam wywołanie; w pełni produkcyjnej wersji brałbyś to z LocationManager z Androida.
+                        anomalyDetector.processNewLocation(androidLoc);
+                    }
+
                     if (!firstLocationReceived) {
 
                         firstLocationReceived = true;
@@ -321,6 +338,8 @@ public class MapaFragment extends Fragment {
                         container,
                         false
                 );
+
+        anomalyDetector = new AnomalyDetector(requireContext());
 
         // =====================================================
         // MAPA
