@@ -48,6 +48,79 @@
 
     </LinearLayout>
 
+    <com.google.android.material.button.MaterialButton
+        android:id="@+id/add_report_button"
+        android:layout_width="56dp"
+        android:layout_height="56dp"
+        android:layout_gravity="end|center_vertical"
+        android:layout_marginEnd="14dp"
+        android:layout_marginBottom="70dp"
+        android:text="⚠"
+        android:textSize="22sp"
+        android:insetLeft="0dp"
+        android:insetTop="0dp"
+        android:insetRight="0dp"
+        android:insetBottom="0dp"
+        android:padding="0dp"
+        android:textAllCaps="false"
+        android:elevation="8dp"
+        app:cornerRadius="28dp"
+        app:backgroundTint="#F44336" />
+
+    <LinearLayout
+        android:id="@+id/report_info_panel"
+        android:layout_width="260dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:padding="14dp"
+        android:background="@drawable/report_info_background"
+        android:elevation="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/report_info_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Zgłoszenie"
+            android:textSize="17sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/report_info_category"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Kategoria:"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/report_info_time"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Godzina:"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/report_info_id"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="ID:"
+            android:textSize="11sp" />
+
+        <Button
+            android:id="@+id/report_info_close"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="8dp"
+            android:text="Zamknij"
+            android:textAllCaps="false" />
+
+    </LinearLayout>
+
     <!-- PRZYCISK MOJEJ LOKALIZACJI -->
     <ImageButton
         android:id="@+id/location_button"
