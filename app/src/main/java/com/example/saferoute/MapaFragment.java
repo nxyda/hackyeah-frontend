@@ -114,6 +114,7 @@ public class MapaFragment extends Fragment {
     private Button layerHistorical;
     private Button layerUserReports;
 
+
     // =========================================================
     // LOKALIZACJA
     // =========================================================
@@ -958,8 +959,8 @@ public class MapaFragment extends Fragment {
 
         setupLayerButton(
                 layerLighting,
-                "💡\nŚwiatło ✓",
-                "💡\nŚwiatło",
+                "💡",
+                "💡",
                 () -> {
                     lightingLayerEnabled =
                             (boolean) layerLighting.getTag();
@@ -971,8 +972,8 @@ public class MapaFragment extends Fragment {
 
         setupLayerButton(
                 layerSafePoints,
-                "🛡\nBezpieczne\npunkty ✓",
-                "🛡\nBezpieczne\npunkty",
+                "🛡",
+                "🛡",
                 () -> {
                     safePointsLayerEnabled =
                             (boolean) layerSafePoints.getTag();
@@ -981,8 +982,8 @@ public class MapaFragment extends Fragment {
 
         setupLayerButton(
                 layerCameras,
-                "📷\nKamery ✓",
-                "📷\nKamery",
+                "📷",
+                "📷",
                 () -> {
                     camerasLayerEnabled =
                             (boolean) layerCameras.getTag();
@@ -991,8 +992,8 @@ public class MapaFragment extends Fragment {
 
         setupLayerButton(
                 layerHistorical,
-                "🕰\nHistoryczne\nzagrożenia ✓",
-                "🕰\nHistoryczne\nzagrożenia",
+                "🕰",
+                "🕰",
                 () -> {
                     historicalLayerEnabled =
                             (boolean) layerHistorical.getTag();
@@ -1001,8 +1002,8 @@ public class MapaFragment extends Fragment {
 
         setupLayerButton(
                 layerUserReports,
-                "🚨\nZgłoszenia\nużytkowników ✓",
-                "🚨\nZgłoszenia\nużytkowników",
+                "🚨",
+                "🚨",
                 () -> {
 
                     userReportsLayerEnabled =
