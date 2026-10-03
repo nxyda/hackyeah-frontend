@@ -1,10 +1,9 @@
 package com.example.saferoute;
 
-import android.Manifest;
 import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.VibrationEffect;
@@ -12,7 +11,6 @@ import android.os.Vibrator;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.Toast;
-import androidx.core.app.ActivityCompat;
 
 public class SosManager {
 
@@ -21,7 +19,6 @@ public class SosManager {
     private Runnable sosRunnable;
     private boolean isSosTriggered = false;
 
-    // Interfejs do komunikacji z mapą (żeby zmienić trasę na Safe Haven)
     public interface SosCallback {
         void onRouteToSafeHavenRequested();
     }
@@ -32,26 +29,22 @@ public class SosManager {
         this.callback = callback;
     }
 
-    // Metoda, którą osoba od UI podepnie pod swój przycisk
     public void attachToButton(View sosButton) {
         sosButton.setOnTouchListener((v, event) -> {
             switch (event.getAction()) {
                 case MotionEvent.ACTION_DOWN:
                     isSosTriggered = false;
-                    // Krótka wibracja informująca, że zaczęto odliczanie
                     vibrate(100);
 
                     sosRunnable = () -> {
                         isSosTriggered = true;
                         triggerSosActions();
                     };
-                    // Uruchom SOS po 3 sekundach (3000 ms)
                     handler.postDelayed(sosRunnable, 3000);
                     return true;
 
                 case MotionEvent.ACTION_UP:
                 case MotionEvent.ACTION_CANCEL:
-                    // Jeśli użytkownik puścił przycisk przed upływem 3 sekund
                     if (!isSosTriggered && sosRunnable != null) {
                         handler.removeCallbacks(sosRunnable);
                         Toast.makeText(context, "Anulowano SOS", Toast.LENGTH_SHORT).show();
@@ -63,37 +56,54 @@ public class SosManager {
     }
 
     private void triggerSosActions() {
-        // Długa wibracja potwierdzająca aktywację
         vibrate(1000);
-        Toast.makeText(context, "SOS AKTYWOWANE! Wzywam pomoc.", Toast.LENGTH_LONG).show();
+        Toast.makeText(context, "SOS AKTYWOWANE!", Toast.LENGTH_LONG).show();
 
-        // 1. Zadzwoń pod 112 (lub zaufany kontakt)
-        //TODO zmienilem numer ze 112 zeby przypadkiem nie zadzwonic xd
-        makeEmergencyCall("11222");
+        // 1. Zadzwoń od razu
+        makeEmergencyCall("514157266");
 
-        // 3. Poinformuj główny ekran, że ma zmienić nawigację do najbliższego Safe Haven
+        // 2. Czarna skrzynka
+        startBlackBoxRecording();
+
+        // 3. Udostępnianie lokalizacji bliskim (Placeholder)
+        notifyEmergencyContacts();
+
+        // 4. Nawigacja ucieczki
         if (callback != null) {
             callback.onRouteToSafeHavenRequested();
         }
     }
 
     private void makeEmergencyCall(String phoneNumber) {
-        Intent intent = new Intent(Intent.ACTION_DIAL); // ACTION_DIAL otwiera dialer, ACTION_CALL dzwoni od razu (wymaga uprawnień)
+        // Zmiana na ACTION_CALL - wymusza natychmiastowe połączenie bez otwierania dialera
+        Intent intent = new Intent(Intent.ACTION_CALL);
         intent.setData(Uri.parse("tel:" + phoneNumber));
-        if (intent.resolveActivity(context.getPackageManager()) != null) {
+        try {
             context.startActivity(intent);
+        } catch (SecurityException e) {
+            // Aplikacja zcrashuje, jeśli nie dodasz uprawnień CALL_PHONE w Manifeście
+            Toast.makeText(context, "Brak uprawnień do dzwonienia!", Toast.LENGTH_SHORT).show();
         }
     }
 
     private void startBlackBoxRecording() {
-        // Mock funkcji na hackathon
-        Toast.makeText(context, "Czarna Skrzynka: Rozpoczęto wysyłanie audio do chmury", Toast.LENGTH_SHORT).show();
+        Toast.makeText(context, "Czarna Skrzynka: Nagrywanie i stream do chmury", Toast.LENGTH_SHORT).show();
     }
 
+    private void notifyEmergencyContacts() {
+        // TODO: Placeholder - tu w przyszłości dodasz logikę pobierania kontaktów z Supabase i wysyłania do nich pusha lub SMSa z linkiem do Live Location
+        Toast.makeText(context, "Powiadamianie bliskich: Wysłano alert z lokalizacją", Toast.LENGTH_SHORT).show();
+    }
+
+    // Naprawiony błąd z wibracjami (kompatybilność ze starszymi Androidami)
     private void vibrate(long milliseconds) {
         Vibrator vibrator = (Vibrator) context.getSystemService(Context.VIBRATOR_SERVICE);
         if (vibrator != null && vibrator.hasVibrator()) {
-            vibrator.vibrate(VibrationEffect.createOneShot(milliseconds, VibrationEffect.DEFAULT_AMPLITUDE));
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                vibrator.vibrate(VibrationEffect.createOneShot(milliseconds, VibrationEffect.DEFAULT_AMPLITUDE));
+            } else {
+                vibrator.vibrate(milliseconds); // Dla starszych wersji Androida
+            }
         }
     }
 }
