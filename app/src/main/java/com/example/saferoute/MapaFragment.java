@@ -14,6 +14,9 @@ import android.widget.LinearLayout;
 import android.widget.TextView;
 import android.widget.Toast;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
@@ -45,6 +48,23 @@ import java.util.Locale;
 import java.util.UUID;
 
 public class MapaFragment extends Fragment {
+
+    private static class NavigationStep {
+
+        String instruction;
+        int distanceMeters;
+        String maneuver;
+
+        NavigationStep(
+                String instruction,
+                int distanceMeters,
+                String maneuver
+        ) {
+            this.instruction = instruction;
+            this.distanceMeters = distanceMeters;
+            this.maneuver = maneuver;
+        }
+    }
 
     // =========================================================
     // MAPA
@@ -100,6 +120,8 @@ public class MapaFragment extends Fragment {
     private TextView routeDetails;
     private TextView safetyStatus;
 
+    private LinearLayout navigationStepsPanel;
+
     // =========================================================
     // PANEL INFORMACJI O ZGŁOSZENIU
     // =========================================================
@@ -139,6 +161,19 @@ public class MapaFragment extends Fragment {
             "reports-layer";
 
     private final List<Report> reports =
+            new ArrayList<>();
+
+    private LinearLayout navigationCurrentStep;
+    private LinearLayout navigationAllSteps;
+
+    private TextView navigationCurrentIcon;
+    private TextView navigationCurrentInstruction;
+    private TextView navigationCurrentDistance;
+    private TextView navigationExpandIcon;
+
+    private boolean navigationExpanded = false;
+
+    private List<NavigationStep> currentNavigationSteps =
             new ArrayList<>();
 
     // =========================================================
@@ -330,6 +365,8 @@ public class MapaFragment extends Fragment {
                 view.findViewById(
                         R.id.mapView
                 );
+        navigationStepsPanel =
+                view.findViewById(R.id.navigation_steps_panel);
 
         // =====================================================
         // LOCATION COMPONENT
@@ -384,6 +421,49 @@ public class MapaFragment extends Fragment {
                 view.findViewById(
                         R.id.add_report_button
                 );
+
+        navigationStepsPanel =
+                view.findViewById(
+                        R.id.navigation_steps_panel
+                );
+
+        navigationCurrentStep =
+                view.findViewById(
+                        R.id.navigation_current_step
+                );
+
+        navigationAllSteps =
+                view.findViewById(
+                        R.id.navigation_all_steps
+                );
+
+        navigationCurrentIcon =
+                view.findViewById(
+                        R.id.navigation_current_icon
+                );
+
+        navigationCurrentInstruction =
+                view.findViewById(
+                        R.id.navigation_current_instruction
+                );
+
+        navigationCurrentDistance =
+                view.findViewById(
+                        R.id.navigation_current_distance
+                );
+
+        navigationExpandIcon =
+                view.findViewById(
+                        R.id.navigation_expand_icon
+                );
+
+        navigationCurrentStep.setOnClickListener(v -> {
+
+            navigationExpanded =
+                    !navigationExpanded;
+
+            updateNavigationPanel();
+        });
 
         // =====================================================
         // TRASY
@@ -560,6 +640,7 @@ public class MapaFragment extends Fragment {
             );
 
             drawSafeRoute();
+            showDemoNavigationSteps();
 
             Toast.makeText(
                     requireContext(),
@@ -1648,5 +1729,328 @@ public class MapaFragment extends Fragment {
         mapView = null;
 
         super.onDestroyView();
+    }
+
+    private void showNavigationSteps(
+            List<NavigationStep> steps
+    ) {
+
+        currentNavigationSteps.clear();
+
+        if (steps == null || steps.isEmpty()) {
+
+            navigationStepsPanel.setVisibility(
+                    View.GONE
+            );
+
+            return;
+        }
+
+        currentNavigationSteps.addAll(steps);
+
+        navigationExpanded = false;
+
+        navigationStepsPanel.setVisibility(
+                View.VISIBLE
+        );
+
+        updateNavigationPanel();
+    }
+
+    private String getNavigationIcon(String maneuver) {
+
+        if (maneuver == null) {
+            return "↑";
+        }
+
+        switch (maneuver) {
+
+            case "right":
+                return "→";
+
+            case "left":
+                return "←";
+
+            case "uturn":
+                return "↶";
+
+            case "crosswalk":
+                return "🚶";
+
+            case "finish":
+                return "🏁";
+
+            case "straight":
+            default:
+                return "↑";
+        }
+    }
+
+    private String formatNavigationDistance(int meters) {
+
+        if (meters < 1000) {
+            return "za " + meters + " m";
+        }
+
+        double kilometers = meters / 1000.0;
+
+        if (kilometers == Math.floor(kilometers)) {
+            return "za " + (int) kilometers + " km";
+        }
+
+        return String.format(
+                java.util.Locale.US,
+                "za %.1f km",
+                kilometers
+        );
+    }
+
+    private void showDemoNavigationSteps() {
+
+        List<NavigationStep> steps =
+                new ArrayList<>();
+
+        steps.add(
+                new NavigationStep(
+                        "Idź prosto",
+                        120,
+                        "straight"
+                )
+        );
+
+        steps.add(
+                new NavigationStep(
+                        "Skręć w prawo",
+                        180,
+                        "right"
+                )
+        );
+
+        steps.add(
+                new NavigationStep(
+                        "Idź prosto",
+                        80,
+                        "straight"
+                )
+        );
+
+        steps.add(
+                new NavigationStep(
+                        "Skręć w lewo",
+                        350,
+                        "left"
+                )
+        );
+
+        steps.add(
+                new NavigationStep(
+                        "Przejdź przez przejście dla pieszych",
+                        40,
+                        "crosswalk"
+                )
+        );
+
+        showNavigationSteps(steps);
+    }
+
+    private void updateNavigationPanel() {
+
+        if (currentNavigationSteps.isEmpty()) {
+
+            navigationStepsPanel.setVisibility(
+                    View.GONE
+            );
+
+            return;
+        }
+
+        NavigationStep currentStep =
+                currentNavigationSteps.get(0);
+
+        navigationCurrentIcon.setText(
+                getNavigationIcon(
+                        currentStep.maneuver
+                )
+        );
+
+        navigationCurrentInstruction.setText(
+                currentStep.instruction
+        );
+
+        navigationCurrentDistance.setText(
+                formatNavigationDistance(
+                        currentStep.distanceMeters
+                )
+        );
+
+        if (navigationExpanded) {
+
+            navigationAllSteps.setVisibility(
+                    View.VISIBLE
+            );
+
+            navigationExpandIcon.setText("⌃");
+
+            buildNavigationList();
+
+        } else {
+
+            navigationAllSteps.setVisibility(
+                    View.GONE
+            );
+
+            navigationExpandIcon.setText("⌄");
+        }
+    }
+
+    private void buildNavigationList() {
+
+        navigationAllSteps.removeAllViews();
+
+        if (currentNavigationSteps.size() <= 1) {
+            return;
+        }
+
+        for (int i = 1;
+             i < currentNavigationSteps.size();
+             i++) {
+
+            NavigationStep step =
+                    currentNavigationSteps.get(i);
+
+            LinearLayout row =
+                    new LinearLayout(requireContext());
+
+            row.setLayoutParams(
+                    new LinearLayout.LayoutParams(
+                            LinearLayout.LayoutParams.MATCH_PARENT,
+                            62
+                    )
+            );
+
+            row.setOrientation(
+                    LinearLayout.HORIZONTAL
+            );
+
+            row.setGravity(
+                    android.view.Gravity.CENTER_VERTICAL
+            );
+
+            row.setPadding(
+                    14,
+                    4,
+                    14,
+                    4
+            );
+
+            TextView icon =
+                    new TextView(requireContext());
+
+            icon.setLayoutParams(
+                    new LinearLayout.LayoutParams(
+                            46,
+                            46
+                    )
+            );
+
+            icon.setGravity(
+                    android.view.Gravity.CENTER
+            );
+
+            icon.setTextSize(26);
+
+            icon.setText(
+                    getNavigationIcon(
+                            step.maneuver
+                    )
+            );
+
+            LinearLayout textContainer =
+                    new LinearLayout(
+                            requireContext()
+                    );
+
+            textContainer.setLayoutParams(
+                    new LinearLayout.LayoutParams(
+                            0,
+                            LinearLayout.LayoutParams.WRAP_CONTENT,
+                            1
+                    )
+            );
+
+            textContainer.setOrientation(
+                    LinearLayout.VERTICAL
+            );
+
+            textContainer.setPadding(
+                    10,
+                    0,
+                    0,
+                    0
+            );
+
+            TextView instruction =
+                    new TextView(requireContext());
+
+            instruction.setText(
+                    step.instruction
+            );
+
+            instruction.setTextSize(15);
+
+            instruction.setTypeface(
+                    null,
+                    android.graphics.Typeface.BOLD
+            );
+
+            TextView distance =
+                    new TextView(requireContext());
+
+            distance.setText(
+                    formatNavigationDistance(
+                            step.distanceMeters
+                    )
+            );
+
+            distance.setTextSize(13);
+
+            textContainer.addView(
+                    instruction
+            );
+
+            textContainer.addView(
+                    distance
+            );
+
+            row.addView(icon);
+            row.addView(textContainer);
+
+            navigationAllSteps.addView(row);
+
+            if (i < currentNavigationSteps.size() - 1) {
+
+                View separator =
+                        new View(requireContext());
+
+                separator.setLayoutParams(
+                        new LinearLayout.LayoutParams(
+                                LinearLayout.LayoutParams.MATCH_PARENT,
+                                1
+                        )
+                );
+
+                separator.setBackgroundColor(
+                        android.graphics.Color.rgb(
+                                238,
+                                238,
+                                238
+                        )
+                );
+
+                navigationAllSteps.addView(
+                        separator
+                );
+            }
+        }
     }
 }
