@@ -10,7 +10,8 @@
         android:id="@+id/mapView"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        app:mapbox_locationComponentEnabled="true" />
+        app:mapbox_locationComponentEnabled="true"
+        app:mapbox_compassEnabled="false" />
 
     <!-- WYSZUKIWANIE -->
     <LinearLayout
@@ -133,17 +134,38 @@
             android:orientation="vertical"
             android:visibility="gone" />
 
-        <!-- PODSUMOWANIE TRASY -->
-        <TextView
-            android:id="@+id/navigation_route_summary"
+        <!-- PODSUMOWANIE TRASY I PRZYCISK WYJŚCIA -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
             android:paddingStart="16dp"
             android:paddingTop="8dp"
             android:paddingEnd="16dp"
-            android:paddingBottom="10dp"
-            android:text="🛡 Bezpieczna  •  2,4 km  •  9 min"
-            android:textSize="13sp" />
+            android:paddingBottom="10dp">
+
+            <TextView
+                android:id="@+id/navigation_route_summary"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="🛡 Bezpieczna  •  2,4 km  •  9 min"
+                android:textSize="13sp" />
+
+            <Button
+                android:id="@+id/btn_exit_navigation"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:text="✕"
+                android:textColor="#F44336"
+                android:backgroundTint="@android:color/transparent"
+                android:textSize="20sp"
+                android:textStyle="bold"
+                android:insetTop="0dp"
+                android:insetBottom="0dp"
+                android:padding="0dp" />
+        </LinearLayout>
 
     </LinearLayout>
 
@@ -321,21 +343,14 @@
         </LinearLayout>
 
         <!-- ========================= -->
-        <!-- RZĄD 2 (2 elementy wyśrodkowane:  x  x) -->
+        <!-- RZĄD 2 (3 elementy: x x x) -->
         <!-- ========================= -->
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="8dp"
-            android:gravity="center">
-
-            <!-- PUSTY ELEMENT PO LEWEJ (dla zachowania proporcji 3 kolumn) -->
-            <Space
-                android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="0.5" />
+            android:layout_marginTop="8dp">
 
             <!-- HISTORYCZNE ZAGROŻENIA -->
             <LinearLayout
@@ -399,11 +414,36 @@
 
             </LinearLayout>
 
-            <!-- PUSTY ELEMENT PO PRAWEJ (dla zachowania proporcji 3 kolumn) -->
-            <Space
+            <!-- WYDARZENIA W MIEŚCIE -->
+            <LinearLayout
                 android:layout_width="0dp"
-                android:layout_height="1dp"
-                android:layout_weight="0.5" />
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical"
+                android:gravity="center"
+                android:layout_margin="3dp">
+
+                <Button
+                    android:id="@+id/layer_city_events"
+                    android:layout_width="64dp"
+                    android:layout_height="64dp"
+                    android:text="🏟"
+                    android:textSize="26sp"
+                    android:textAllCaps="false"
+                    android:padding="0dp"
+                    android:minWidth="0dp"
+                    android:minHeight="0dp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:text="Wydarzenia w mieście"
+                    android:textSize="11sp"
+                    android:textAlignment="center"
+                    android:gravity="center" />
+
+            </LinearLayout>
 
         </LinearLayout>
 
@@ -428,6 +468,211 @@
         android:elevation="8dp"
         app:cornerRadius="28dp"
         app:backgroundTint="#F44336" />
+
+    <!-- INFORMACJE O BEZPIECZNYM PUNKCIE -->
+    <LinearLayout
+        android:id="@+id/safe_point_info_panel"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/report_info_background"
+        android:elevation="12dp"
+        android:visibility="gone">
+
+        <!-- TYTUŁ -->
+        <TextView
+            android:id="@+id/safe_point_info_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🛡 Bezpieczny punkt"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- NAZWA -->
+        <TextView
+            android:id="@+id/safe_point_info_name"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Nazwa:"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+
+        <!-- KATEGORIA -->
+        <TextView
+            android:id="@+id/safe_point_info_category"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Kategoria:"
+            android:textSize="14sp" />
+
+        <!-- GODZINY -->
+        <TextView
+            android:id="@+id/safe_point_info_hours"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Godziny:"
+            android:textSize="14sp" />
+
+        <!-- 24/7 -->
+        <TextView
+            android:id="@+id/safe_point_info_247"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="🕐 Czynne 24/7"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- ZAMKNIJ -->
+        <Button
+            android:id="@+id/safe_point_info_close"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="10dp"
+            android:text="Zamknij"
+            android:textAllCaps="false" />
+
+    </LinearLayout>
+
+    <!-- INFORMACJE O WYDARZENIU W MIEŚCIE -->
+    <LinearLayout
+        android:id="@+id/city_event_info_panel"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/report_info_background"
+        android:elevation="12dp"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/city_event_info_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="🏟️ Wydarzenie w mieście"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/city_event_info_category"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Kategoria:"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/city_event_info_description"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Opis:"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/city_event_info_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="📅 Data:"
+            android:textSize="14sp" />
+
+        <TextView
+            android:id="@+id/city_event_info_risk"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="⚠️ Wpływ na bezpieczeństwo: +25%"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/city_event_info_close"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="10dp"
+            android:text="Zamknij"
+            android:textAllCaps="false" />
+
+    </LinearLayout>
+
+    <!-- INFORMACJE O HISTORYCZNYM ZAGROŻENIU -->
+    <LinearLayout
+        android:id="@+id/historical_threat_info_panel"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:padding="16dp"
+        android:background="@drawable/report_info_background"
+        android:elevation="12dp"
+        android:visibility="gone">
+
+        <!-- TYTUŁ -->
+        <TextView
+            android:id="@+id/historical_threat_info_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="⚠️ Historyczne zagrożenie"
+            android:textSize="18sp"
+            android:textStyle="bold" />
+
+        <!-- KATEGORIA -->
+        <TextView
+            android:id="@+id/historical_threat_info_category"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="Kategoria:"
+            android:textSize="14sp" />
+
+        <!-- DATA -->
+        <TextView
+            android:id="@+id/historical_threat_info_date"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="6dp"
+            android:text="Data:"
+            android:textSize="14sp" />
+
+        <!-- POZIOM ZAGROŻENIA -->
+        <TextView
+            android:id="@+id/historical_threat_info_severity"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:text="🔴 Poziom zagrożenia:"
+            android:textSize="14sp"
+            android:textStyle="bold" />
+
+        <!-- WARTOŚĆ SEVERITY -->
+        <TextView
+            android:id="@+id/historical_threat_info_score"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:text="Severity: 0.85"
+            android:textSize="13sp" />
+
+        <!-- ZAMKNIJ -->
+        <Button
+            android:id="@+id/historical_threat_info_close"
+            android:layout_width="wrap_content"
+            android:layout_height="40dp"
+            android:layout_gravity="end"
+            android:layout_marginTop="10dp"
+            android:text="Zamknij"
+            android:textAllCaps="false" />
+
+    </LinearLayout>
 
     <!-- INFORMACJE O ZGŁOSZENIU -->
     <LinearLayout

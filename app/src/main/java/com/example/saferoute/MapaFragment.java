@@ -3,6 +3,8 @@ package com.example.saferoute;
 import android.Manifest;
 import android.app.AlertDialog;
 import android.content.pm.PackageManager;
+import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.os.Bundle;
 import android.view.LayoutInflater;
 import android.view.View;
@@ -15,7 +17,9 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import com.mapbox.geojson.Point;
 
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
@@ -31,6 +35,12 @@ import com.mapbox.maps.CameraOptions;
 import com.mapbox.maps.MapView;
 import com.mapbox.maps.Style;
 import com.mapbox.maps.plugin.Plugin;
+import com.mapbox.maps.plugin.annotation.AnnotationConfig;
+import com.mapbox.maps.plugin.annotation.AnnotationPlugin;
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotation;
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationManager;
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions;
+import com.mapbox.maps.plugin.annotation.AnnotationType;
 import com.mapbox.maps.plugin.gestures.GesturesPlugin;
 import com.mapbox.maps.plugin.gestures.GesturesUtils;
 import com.mapbox.maps.plugin.gestures.OnMapClickListener;
@@ -39,6 +49,12 @@ import com.mapbox.maps.plugin.locationcomponent.OnIndicatorPositionChangedListen
 import com.mapbox.maps.RenderedQueryGeometry;
 import com.mapbox.maps.RenderedQueryOptions;
 import com.mapbox.maps.QueriedRenderedFeature;
+import com.mapbox.geojson.Point;
+import com.mapbox.maps.plugin.locationcomponent.OnIndicatorBearingChangedListener;
+import androidx.activity.OnBackPressedCallback;
+import com.mapbox.maps.plugin.LocationPuck2D;
+import androidx.core.content.ContextCompat;
+import com.mapbox.maps.ImageHolder;
 
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
@@ -46,10 +62,17 @@ import java.util.Arrays;
 import java.util.Date;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.UUID;
 
 import android.os.Vibrator;
 import android.os.VibrationEffect;
+
+import android.graphics.Bitmap;
+import android.graphics.Canvas;
+import android.graphics.drawable.Drawable;
+
+import androidx.core.content.ContextCompat;
 
 public class MapaFragment extends Fragment {
 
@@ -131,6 +154,19 @@ public class MapaFragment extends Fragment {
     private boolean firstLocationReceived = false;
 
     private boolean locationListenerAdded = false;
+
+    private boolean isNavigating = false;
+    private Button btnExitNavigation;
+
+    // Nasłuchiwacz kompasu - obraca mapę z telefonem
+    private final OnIndicatorBearingChangedListener onIndicatorBearingChangedListener = bearing -> {
+        if (mapView != null && isNavigating) {
+            // "Zatrzaskujemy" kamerę na aktualnym obrocie, bez dotykania ustawień Mapboxa!
+            mapView.getMapboxMap().setCamera(
+                    new CameraOptions.Builder().bearing(bearing).build()
+            );
+        }
+    };
 
     private static final int LOCATION_PERMISSION_REQUEST_CODE = 1001;
 
@@ -215,10 +251,119 @@ public class MapaFragment extends Fragment {
     private boolean currentReportConfirmed = false;
 
     private boolean lightingLayerEnabled = true;
+
     private boolean safePointsLayerEnabled = true;
+    private PointAnnotationManager safePointAnnotationManager;
+
+    private LinearLayout safePointInfoPanel;
+
+    private TextView safePointInfoTitle;
+    private TextView safePointInfoName;
+    private TextView safePointInfoCategory;
+    private TextView safePointInfoHours;
+    private TextView safePointInfo247;
+
+    private Button safePointInfoClose;
+
+    private Map<String, SafePoint> safePointMap =
+            new HashMap<>();
+
     private boolean camerasLayerEnabled = true;
-    private boolean historicalLayerEnabled = true;
+    private PointAnnotationManager cameraAnnotationManager;
+
     private boolean userReportsLayerEnabled = true;
+
+    private PointAnnotationManager historicalThreatAnnotationManager;
+
+    private Map<String, HistoricalThreat> historicalThreatMap =
+            new HashMap<>();
+
+    private boolean historicalThreatsLayerEnabled = true;
+
+    private LinearLayout historicalThreatInfoPanel;
+
+    private TextView historicalThreatInfoCategory;
+    private TextView historicalThreatInfoDate;
+    private TextView historicalThreatInfoSeverity;
+    private TextView historicalThreatInfoScore;
+
+    private Button historicalThreatInfoClose;
+
+    private boolean cityEventsLayerEnabled = true;
+
+    private PointAnnotationManager cityEventAnnotationManager;
+
+    private Map<String, CityEvent> cityEventMap = new HashMap<>();
+
+    private LinearLayout cityEventInfoPanel;
+    private TextView cityEventInfoTitle;
+    private TextView cityEventInfoCategory;
+    private TextView cityEventInfoDescription;
+    private TextView cityEventInfoDate;
+    private TextView cityEventInfoRisk;
+    private Button cityEventInfoClose;
+
+    private static class CityEvent {
+
+        String title;
+        String description;
+        String category;
+
+        String startsAt;
+        String endsAt;
+
+        double latitude;
+        double longitude;
+
+        double radiusMeters;
+        double riskIncrease;
+
+        CityEvent(
+                String title,
+                String description,
+                String category,
+                String startsAt,
+                String endsAt,
+                double latitude,
+                double longitude,
+                double radiusMeters,
+                double riskIncrease
+        ) {
+            this.title = title;
+            this.description = description;
+            this.category = category;
+            this.startsAt = startsAt;
+            this.endsAt = endsAt;
+            this.latitude = latitude;
+            this.longitude = longitude;
+            this.radiusMeters = radiusMeters;
+            this.riskIncrease = riskIncrease;
+        }
+    }
+
+
+    private static class HistoricalThreat {
+
+        String category;
+        String occuredAt;
+        double severity;
+        double latitude;
+        double longitude;
+
+        HistoricalThreat(
+                String category,
+                String occuredAt,
+                double severity,
+                double latitude,
+                double longitude
+        ) {
+            this.category = category;
+            this.occuredAt = occuredAt;
+            this.severity = severity;
+            this.latitude = latitude;
+            this.longitude = longitude;
+        }
+    }
 
 
     // =========================================================
@@ -260,47 +405,35 @@ public class MapaFragment extends Fragment {
     // LISTENER GPS
     // =========================================================
 
-    private final OnIndicatorPositionChangedListener
-            onIndicatorPositionChangedListener =
-            new OnIndicatorPositionChangedListener() {
+    private final OnIndicatorPositionChangedListener onIndicatorPositionChangedListener = new OnIndicatorPositionChangedListener() {
+        @Override
+        public void onIndicatorPositionChanged(Point point) {
+            currentLocation = point;
+            updateNavigationProgress(point);
+            
+            if (anomalyDetector != null) {
+                Location androidLoc = new Location("Mapbox");
+                androidLoc.setLatitude(point.latitude());
+                androidLoc.setLongitude(point.longitude());
+                anomalyDetector.processNewLocation(androidLoc);
+            }
 
-                @Override
-                public void onIndicatorPositionChanged(
-                        Point point
-                ) {
-
-                    currentLocation = point;
-
-                    updateNavigationProgress(point);
-                    if (anomalyDetector != null) {
-                        // Mapbox daje Point, ale AnomalyDetector potrzebuje android.location.Location.
-                        // Musimy szybko to zmapować. Jako Provider podajemy "Mapbox".
-                        Location androidLoc = new Location("Mapbox");
-                        androidLoc.setLatitude(point.latitude());
-                        androidLoc.setLongitude(point.longitude());
-                        
-                        // Uwaga: Mapboxowa metoda OnIndicatorPositionChangedListener nie dostarcza prędkości (speed).
-                        // Detektor poradzi sobie z postojem z samego dystansu, ale dla biegu musimy symulować / liczyć.
-                        // Zostawiam wywołanie; w pełni produkcyjnej wersji brałbyś to z LocationManager z Androida.
-                        anomalyDetector.processNewLocation(androidLoc);
-                    }
-
-                    if (!firstLocationReceived) {
-
-                        firstLocationReceived = true;
-
-                        if (mapView != null) {
-
-                            mapView.getMapboxMap().setCamera(
-                                    new CameraOptions.Builder()
-                                            .center(point)
-                                            .zoom(14.0)
-                                            .build()
-                            );
-                        }
-                    }
+            if (mapView != null) {
+                if (isNavigating) {
+                    // Kamera "goni" kropkę podczas nawigacji 3D
+                    mapView.getMapboxMap().setCamera(
+                            new CameraOptions.Builder().center(point).build()
+                    );
+                } else if (!firstLocationReceived) {
+                    // Pierwsze odpalenie aplikacji (centrowanie mapy)
+                    firstLocationReceived = true;
+                    mapView.getMapboxMap().setCamera(
+                            new CameraOptions.Builder().center(point).zoom(14.0).build()
+                    );
                 }
-            };
+            }
+        }
+    };
 
     // =========================================================
     // CLICK NA MAPIE
@@ -520,6 +653,28 @@ public class MapaFragment extends Fragment {
                         R.id.layer_historical
                 );
 
+        historicalThreatInfoPanel =
+                view.findViewById(R.id.historical_threat_info_panel);
+
+        historicalThreatInfoCategory =
+                view.findViewById(R.id.historical_threat_info_category);
+
+        historicalThreatInfoDate =
+                view.findViewById(R.id.historical_threat_info_date);
+
+        historicalThreatInfoSeverity =
+                view.findViewById(R.id.historical_threat_info_severity);
+
+        historicalThreatInfoScore =
+                view.findViewById(R.id.historical_threat_info_score);
+
+        historicalThreatInfoClose =
+                view.findViewById(R.id.historical_threat_info_close);
+
+        historicalThreatInfoClose.setOnClickListener(
+                v -> historicalThreatInfoPanel.setVisibility(View.GONE)
+        );
+
         layerUserReports =
                 view.findViewById(
                         R.id.layer_user_reports
@@ -593,6 +748,9 @@ public class MapaFragment extends Fragment {
                 view.findViewById(
                         R.id.navigation_route_summary
                 );
+
+        btnExitNavigation = view.findViewById(R.id.btn_exit_navigation);
+        btnExitNavigation.setOnClickListener(v -> exitNavigationMode());
 
         // =====================================================
         // TRASY
@@ -681,6 +839,72 @@ public class MapaFragment extends Fragment {
                         R.id.report_info_close
                 );
 
+        safePointInfoPanel =
+                view.findViewById(
+                        R.id.safe_point_info_panel
+                );
+
+        safePointInfoTitle =
+                view.findViewById(
+                        R.id.safe_point_info_title
+                );
+
+        safePointInfoName =
+                view.findViewById(
+                        R.id.safe_point_info_name
+                );
+
+        safePointInfoCategory =
+                view.findViewById(
+                        R.id.safe_point_info_category
+                );
+
+        safePointInfoHours =
+                view.findViewById(
+                        R.id.safe_point_info_hours
+                );
+
+        safePointInfo247 =
+                view.findViewById(
+                        R.id.safe_point_info_247
+                );
+
+        safePointInfoClose =
+                view.findViewById(
+                        R.id.safe_point_info_close
+                );
+
+        cityEventInfoPanel =
+                view.findViewById(R.id.city_event_info_panel);
+
+        cityEventInfoTitle =
+                view.findViewById(R.id.city_event_info_title);
+
+        cityEventInfoCategory =
+                view.findViewById(R.id.city_event_info_category);
+
+        cityEventInfoDescription =
+                view.findViewById(R.id.city_event_info_description);
+
+        cityEventInfoDate =
+                view.findViewById(R.id.city_event_info_date);
+
+        cityEventInfoRisk =
+                view.findViewById(R.id.city_event_info_risk);
+
+        cityEventInfoClose =
+                view.findViewById(R.id.city_event_info_close);
+
+        cityEventInfoClose.setOnClickListener(
+                v -> cityEventInfoPanel.setVisibility(View.GONE)
+        );
+
+        safePointInfoClose.setOnClickListener(
+                v -> safePointInfoPanel.setVisibility(
+                        View.GONE
+                )
+        );
+
         reportInfoConfirm.setOnClickListener(v -> {
 
             if (!currentReportConfirmed) {
@@ -731,6 +955,11 @@ public class MapaFragment extends Fragment {
                 View.GONE
         );
 
+        Button layerCityEvents =
+                view.findViewById(
+                        R.id.layer_city_events
+                );
+
         // =====================================================
         // MAPBOX STYLE
         // =====================================================
@@ -768,6 +997,14 @@ public class MapaFragment extends Fragment {
                             // ---------------------------------
 
                             updateReportMarkers();
+
+                            updateCameraMarkers();
+
+                            updateSafePointMarkers();
+
+                            updateHistoricalThreatMarkers();
+
+                            updateCityEventMarkers();
                         }
                 );
 
@@ -997,8 +1234,11 @@ public class MapaFragment extends Fragment {
                 "🛡",
                 "🛡",
                 () -> {
+
                     safePointsLayerEnabled =
                             (boolean) layerSafePoints.getTag();
+
+                    updateSafePointLayerVisibility();
                 }
         );
 
@@ -1007,8 +1247,11 @@ public class MapaFragment extends Fragment {
                 "📷",
                 "📷",
                 () -> {
+
                     camerasLayerEnabled =
                             (boolean) layerCameras.getTag();
+
+                    updateCameraLayerVisibility();
                 }
         );
 
@@ -1017,8 +1260,11 @@ public class MapaFragment extends Fragment {
                 "🕰",
                 "🕰",
                 () -> {
-                    historicalLayerEnabled =
+
+                    historicalThreatsLayerEnabled =
                             (boolean) layerHistorical.getTag();
+
+                    updateHistoricalThreatLayerVisibility();
                 }
         );
 
@@ -1034,6 +1280,35 @@ public class MapaFragment extends Fragment {
                     updateReportLayerVisibility();
                 }
         );
+
+        setupLayerButton(
+                layerCityEvents,
+                "🏟",
+                "🏟",
+                () -> {
+
+                    cityEventsLayerEnabled =
+                            (boolean) layerCityEvents.getTag();
+
+                    updateCityEventLayerVisibility();
+                }
+        );
+
+        requireActivity().getOnBackPressedDispatcher().addCallback(getViewLifecycleOwner(), new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                if (isNavigating) {
+                    exitNavigationMode();
+                } else if (layersPanel != null && layersPanel.getVisibility() == View.VISIBLE) {
+                    layersPanel.setVisibility(View.GONE);
+                } else if (reportInfoPanel != null && reportInfoPanel.getVisibility() == View.VISIBLE) {
+                    reportInfoPanel.setVisibility(View.GONE);
+                } else {
+                    setEnabled(false);
+                    requireActivity().onBackPressed();
+                }
+            }
+        });
 
 
         return view;
@@ -1758,44 +2033,41 @@ public class MapaFragment extends Fragment {
     // KAMERA NA TRASĘ
     // =========================================================
 
-    private void moveCameraToRoute(
-            List<Point> points
-    ) {
-
-        if (points == null
-                || points.isEmpty()) {
+    private void moveCameraToRoute(List<Point> points) {
+        if (points == null || points.isEmpty() || mapView == null) {
             return;
         }
 
-        Point first =
-                points.get(0);
-
-        Point last =
-                points.get(
-                        points.size() - 1
+        // Jeśli jesteśmy w trybie nawigacji (3D), NIE zmieniaj kąta na 0
+        if (isNavigating) {
+            if (currentLocation != null) {
+                // Pobierz aktualny kąt obrotu kompasu z mapy, żeby kamera nie "szarpała"
+                double currentBearing = mapView.getMapboxMap().getCameraState().getBearing();
+                
+                mapView.getMapboxMap().setCamera(
+                        new CameraOptions.Builder()
+                                .center(currentLocation)
+                                .zoom(18.0)
+                                .pitch(60.0) 
+                                .bearing(currentBearing) // <- Utrzymujemy bieżący kierunek patrzenia!
+                                .build() 
                 );
+            }
+            return;
+        }
 
-        double centerLng =
-                (
-                        first.longitude()
-                                + last.longitude()
-                ) / 2.0;
-
-        double centerLat =
-                (
-                        first.latitude()
-                                + last.latitude()
-                ) / 2.0;
+        // Zwykły podgląd mapy z góry (2D)
+        Point first = points.get(0);
+        Point last = points.get(points.size() - 1);
+        double centerLng = (first.longitude() + last.longitude()) / 2.0;
+        double centerLat = (first.latitude() + last.latitude()) / 2.0;
 
         mapView.getMapboxMap().setCamera(
                 new CameraOptions.Builder()
-                        .center(
-                                Point.fromLngLat(
-                                        centerLng,
-                                        centerLat
-                                )
-                        )
+                        .center(Point.fromLngLat(centerLng, centerLat))
                         .zoom(13.0)
+                        .pitch(0.0)
+                        .bearing(0.0)
                         .build()
         );
     }
@@ -1825,8 +2097,22 @@ public class MapaFragment extends Fragment {
 
         locationComponent.updateSettings(
                 settings -> {
-
                     settings.setEnabled(true);
+                    
+                    // Zmuszamy kropkę do obracania się z kompasem telefonu
+                    settings.setPuckBearingEnabled(true);
+
+                    // Ładujemy wbudowane w Mapboxa ikony ze strzałką kierunkową (cone)
+                    LocationPuck2D puck = new LocationPuck2D();
+                    puck.setBearingImage(ImageHolder.from(com.mapbox.maps.R.drawable.mapbox_user_bearing_icon));
+                    puck.setShadowImage(ImageHolder.from(com.mapbox.maps.R.drawable.mapbox_user_icon_shadow));
+                    puck.setTopImage(ImageHolder.from(com.mapbox.maps.R.drawable.mapbox_user_puck_icon));
+                    
+                    // NOWE: Skalujemy wskaźnik do bardziej proporcjonalnych rozmiarów (np. 35% oryginalnego rozmiaru)
+                    // Wartość podana w postaci JSON-owej tablicy (wymagane przez Mapbox API)
+                    puck.setScaleExpression("[\"interpolate\", [\"linear\"], [\"zoom\"], 10, 0.35, 20, 0.6]");
+                    
+                    settings.setLocationPuck(puck);
 
                     return null;
                 }
@@ -1834,9 +2120,16 @@ public class MapaFragment extends Fragment {
 
         if (!locationListenerAdded) {
 
+            // Nasłuchiwanie zmiany lokalizacji
             locationComponent
                     .addOnIndicatorPositionChangedListener(
                             onIndicatorPositionChangedListener
+                    );
+            
+            // NOWE: Nasłuchiwanie zmiany obrotu (kompas)
+            locationComponent
+                    .addOnIndicatorBearingChangedListener(
+                            onIndicatorBearingChangedListener
                     );
 
             locationListenerAdded = true;
@@ -1932,9 +2225,16 @@ public class MapaFragment extends Fragment {
         if (locationComponent != null
                 && locationListenerAdded) {
 
+            // Zatrzymanie GPS
             locationComponent
                     .removeOnIndicatorPositionChangedListener(
                             onIndicatorPositionChangedListener
+                    );
+            
+            // NOWE: Zatrzymanie kompasu
+            locationComponent
+                    .removeOnIndicatorBearingChangedListener(
+                            onIndicatorBearingChangedListener
                     );
 
             locationListenerAdded = false;
@@ -1979,9 +2279,16 @@ public class MapaFragment extends Fragment {
         if (locationComponent != null
                 && locationListenerAdded) {
 
+            // Zatrzymanie GPS
             locationComponent
                     .removeOnIndicatorPositionChangedListener(
                             onIndicatorPositionChangedListener
+                    );
+            
+            // NOWE: Zatrzymanie kompasu
+            locationComponent
+                    .removeOnIndicatorBearingChangedListener(
+                            onIndicatorBearingChangedListener
                     );
 
             locationListenerAdded = false;
@@ -2122,8 +2429,6 @@ public class MapaFragment extends Fragment {
         List<NavigationStep> steps =
                 new ArrayList<>();
 
-
-
         steps.add(
                 new NavigationStep(
                         "Skręć w prawo",
@@ -2132,7 +2437,6 @@ public class MapaFragment extends Fragment {
                         rightTurn
                 )
         );
-
 
         steps.add(
                 new NavigationStep(
@@ -2152,7 +2456,6 @@ public class MapaFragment extends Fragment {
                 )
         );
 
-
         steps.add(
                 new NavigationStep(
                         "Zawróć",
@@ -2163,6 +2466,8 @@ public class MapaFragment extends Fragment {
         );
 
         currentNavigationStepIndex = 0;
+
+        isNavigating = true;
 
         navigationVibrationTriggered = false;
 
@@ -2176,6 +2481,55 @@ public class MapaFragment extends Fragment {
 
         // Od razu sprawdź odległość od pierwszego manewru
         updateNavigationProgress(currentLocation);
+
+        // WŁĄCZAMY DETEKCJĘ ZAGROŻEŃ TYLKO NA TRASIE
+        if (anomalyDetector != null) {
+            anomalyDetector.setNavigationActive(true);
+        }
+
+        // AKTYWACJA TRYBU NAWIGACJI 3D (JAK GOOGLE MAPS)
+        if (locationComponent != null) {
+            locationComponent.updateSettings(settings -> {
+                settings.setEnabled(true);
+                settings.setPulsingEnabled(false); // wyłączamy pulsowanie z trybu spoczynku
+                return null;
+            });
+            
+            // NOWE: Obliczamy idealny kąt początkowy (kierunek do pierwszego manewru)
+            double routeBearing = calculateBearing(currentLocation, steps.get(0).maneuverPoint);
+            
+            mapView.getMapboxMap().setCamera(
+                    new CameraOptions.Builder()
+                            .center(currentLocation)
+                            .zoom(18.0) 
+                            .pitch(60.0) 
+                            .bearing(routeBearing) // Startujemy skierowani idealnie wzdłuż trasy!
+                            .build()
+            );
+        }
+    }
+
+    private void exitNavigationMode() {
+        if (!isNavigating) return;
+        isNavigating = false;
+        
+        navigationStepsPanel.setVisibility(View.GONE);
+        
+        if (anomalyDetector != null) {
+            anomalyDetector.setNavigationActive(false);
+        }
+        
+        // Wracamy do widoku 2D (płasko) patrząc na północ
+        if (currentLocation != null) {
+            mapView.getMapboxMap().setCamera(
+                    new CameraOptions.Builder()
+                            .center(currentLocation)
+                            .zoom(14.0)
+                            .pitch(0.0) // Płasko
+                            .bearing(0.0) // Północ u góry
+                            .build()
+            );
+        }
     }
 
     private void updateNavigationPanel() {
@@ -2470,6 +2824,24 @@ public class MapaFragment extends Fragment {
         }
     }
 
+    // =========================================================
+    // OBLICZANIE KĄTA DO CELU (ŻEBY DROGA BYŁA NA GÓRZE)
+    // =========================================================
+    private double calculateBearing(Point start, Point end) {
+        double lat1 = Math.toRadians(start.latitude());
+        double lon1 = Math.toRadians(start.longitude());
+        double lat2 = Math.toRadians(end.latitude());
+        double lon2 = Math.toRadians(end.longitude());
+
+        double dLon = lon2 - lon1;
+
+        double y = Math.sin(dLon) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(dLon);
+
+        double bearing = Math.atan2(y, x);
+        return (Math.toDegrees(bearing) + 360) % 360;
+    }
+
     private double distanceBetweenPoints(
             Point first,
             Point second
@@ -2583,6 +2955,23 @@ public class MapaFragment extends Fragment {
                     "Dotarłeś do celu"
             );
 
+            // WYŁĄCZAMY DETEKCJĘ
+            if (anomalyDetector != null) {
+                anomalyDetector.setNavigationActive(false);
+            }
+
+            // POWRÓT DO PŁASKIEJ MAPY
+            if (currentLocation != null) {
+                mapView.getMapboxMap().setCamera(
+                        new CameraOptions.Builder()
+                                .center(currentLocation)
+                                .zoom(15.0)
+                                .pitch(0.0) // Płasko, z góry
+                                .bearing(0.0) // Północ na górze
+                                .build()
+                );
+            }
+
             navigationCurrentDistance.setText("");
 
             return;
@@ -2619,6 +3008,15 @@ public class MapaFragment extends Fragment {
             Runnable onToggle
     ) {
 
+        button.setTag(true);
+
+        // Początkowo warstwa jest włączona
+        updateLayerButtonAppearance(
+                button,
+                true,
+                enabledText
+        );
+
         button.setOnClickListener(v -> {
 
             boolean enabled =
@@ -2629,7 +3027,9 @@ public class MapaFragment extends Fragment {
 
             button.setTag(enabled);
 
-            button.setText(
+            updateLayerButtonAppearance(
+                    button,
+                    enabled,
                     enabled
                             ? enabledText
                             : disabledText
@@ -2637,8 +3037,6 @@ public class MapaFragment extends Fragment {
 
             onToggle.run();
         });
-
-        button.setTag(true);
     }
 
     private void updateReportLayerVisibility() {
@@ -2661,6 +3059,862 @@ public class MapaFragment extends Fragment {
 
         } catch (Exception ignored) {
         }
+    }
+    private void updateLayerButtonAppearance(
+            Button button,
+            boolean enabled,
+            String icon
+    ) {
+
+        button.setText(icon);
+
+        if (enabled) {
+
+            button.setBackgroundTintList(
+                    android.content.res.ColorStateList.valueOf(
+                            android.graphics.Color.rgb(
+                                    33,
+                                    150,
+                                    243
+                            )
+                    )
+            );
+
+            button.setTextColor(
+                    android.graphics.Color.WHITE
+            );
+
+        } else {
+
+            button.setBackgroundTintList(
+                    android.content.res.ColorStateList.valueOf(
+                            android.graphics.Color.rgb(
+                                    224,
+                                    224,
+                                    224
+                            )
+                    )
+            );
+
+            button.setTextColor(
+                    android.graphics.Color.rgb(
+                            80,
+                            80,
+                            80
+                    )
+            );
+        }
+    }
+
+    private Bitmap getCameraBitmap() {
+
+        Drawable drawable =
+                ContextCompat.getDrawable(
+                        requireContext(),
+                        R.drawable.ic_camera_map
+                );
+
+        if (drawable == null) {
+            return null;
+        }
+
+        int width = 96;
+        int height = 96;
+
+        Bitmap bitmap =
+                Bitmap.createBitmap(
+                        width,
+                        height,
+                        Bitmap.Config.ARGB_8888
+                );
+
+        Canvas canvas =
+                new Canvas(bitmap);
+
+        drawable.setBounds(
+                0,
+                0,
+                width,
+                height
+        );
+
+        drawable.draw(canvas);
+
+        return bitmap;
+    }
+
+    private void updateCameraMarkers() {
+
+        if (mapView == null) {
+            return;
+        }
+
+        // ============================================
+        // POBIERZ ANNOTATION PLUGIN
+        // ============================================
+
+        AnnotationPlugin annotationPlugin =
+                mapView.getPlugin(
+                        Plugin.MAPBOX_ANNOTATION_PLUGIN_ID
+                );
+
+        if (annotationPlugin == null) {
+            return;
+        }
+
+        // ============================================
+        // UTWÓRZ MANAGERA
+        // ============================================
+
+        if (cameraAnnotationManager == null) {
+
+            cameraAnnotationManager =
+                    (PointAnnotationManager)
+                            annotationPlugin.createAnnotationManager(
+                                    AnnotationType.PointAnnotation,
+                                    new AnnotationConfig()
+                            );
+
+        } else {
+
+            cameraAnnotationManager.deleteAll();
+        }
+
+        // ============================================
+        // IKONA KAMERY
+        // ============================================
+
+        Bitmap cameraBitmap = getCameraBitmap();
+
+        if (cameraBitmap == null) {
+            return;
+        }
+
+        // ============================================
+        // TAURON ARENA KRAKÓW
+        //
+        // 50.0670, 19.9934
+        // ============================================
+
+        double arenaLat = 50.0670;
+        double arenaLon = 19.9934;
+
+        // ============================================
+        // KAMERA 1
+        // ============================================
+
+        PointAnnotationOptions camera1 =
+                new PointAnnotationOptions()
+                        .withPoint(
+                                Point.fromLngLat(
+                                        arenaLon + 0.0010,
+                                        arenaLat + 0.0010
+                                )
+                        )
+                        .withIconImage(cameraBitmap)
+                        .withIconSize(1.0);
+
+        // ============================================
+        // KAMERA 2
+        // ============================================
+
+        PointAnnotationOptions camera2 =
+                new PointAnnotationOptions()
+                        .withPoint(
+                                Point.fromLngLat(
+                                        arenaLon - 0.0010,
+                                        arenaLat + 0.0010
+                                )
+                        )
+                        .withIconImage(cameraBitmap)
+                        .withIconSize(1.0);
+
+        // ============================================
+        // KAMERA 3
+        // ============================================
+
+        PointAnnotationOptions camera3 =
+                new PointAnnotationOptions()
+                        .withPoint(
+                                Point.fromLngLat(
+                                        arenaLon + 0.0010,
+                                        arenaLat - 0.0010
+                                )
+                        )
+                        .withIconImage(cameraBitmap)
+                        .withIconSize(1.0);
+
+        // ============================================
+        // KAMERA 4
+        // ============================================
+
+        PointAnnotationOptions camera4 =
+                new PointAnnotationOptions()
+                        .withPoint(
+                                Point.fromLngLat(
+                                        arenaLon - 0.0010,
+                                        arenaLat - 0.0010
+                                )
+                        )
+                        .withIconImage(cameraBitmap)
+                        .withIconSize(1.0);
+
+        // ============================================
+        // DODAJ KAMERY
+        // ============================================
+
+        cameraAnnotationManager.create(camera1);
+        cameraAnnotationManager.create(camera2);
+        cameraAnnotationManager.create(camera3);
+        cameraAnnotationManager.create(camera4);
+
+        // ============================================
+        // WIDOCZNOŚĆ
+        // ============================================
+
+        updateCameraLayerVisibility();
+    }
+
+    private void updateCameraLayerVisibility() {
+
+        if (cameraAnnotationManager == null) {
+            return;
+        }
+
+        cameraAnnotationManager.setIconOpacity(
+                camerasLayerEnabled ? 1.0 : 0.0
+        );
+    }
+
+    private static class SafePoint {
+
+        String category;
+        String name;
+        String openingHoursRaw;
+        boolean is24_7;
+        double latitude;
+        double longitude;
+
+        SafePoint(
+                String category,
+                String name,
+                String openingHoursRaw,
+                boolean is24_7,
+                double latitude,
+                double longitude
+        ) {
+            this.category = category;
+            this.name = name;
+            this.openingHoursRaw = openingHoursRaw;
+            this.is24_7 = is24_7;
+            this.latitude = latitude;
+            this.longitude = longitude;
+        }
+    }
+
+    private List<SafePoint> getExampleSafePoints() {
+
+        double arenaLat = 50.0670;
+        double arenaLon = 19.9934;
+
+        List<SafePoint> points = new ArrayList<>();
+
+        points.add(
+                new SafePoint(
+                        "police",
+                        "Komisariat Policji",
+                        "00:00-24:00",
+                        true,
+                        arenaLat + 0.0020,
+                        arenaLon - 0.0015
+                )
+        );
+
+        points.add(
+                new SafePoint(
+                        "hospital",
+                        "Szpital",
+                        "00:00-24:00",
+                        true,
+                        arenaLat + 0.0010,
+                        arenaLon + 0.0020
+                )
+        );
+
+        points.add(
+                new SafePoint(
+                        "fire_station",
+                        "Straż Pożarna",
+                        "00:00-24:00",
+                        true,
+                        arenaLat - 0.0015,
+                        arenaLon + 0.0015
+                )
+        );
+
+        points.add(
+                new SafePoint(
+                        "pharmacy",
+                        "Apteka",
+                        "08:00-20:00",
+                        false,
+                        arenaLat - 0.0010,
+                        arenaLon - 0.0020
+                )
+        );
+
+        points.add(
+                new SafePoint(
+                        "fuel_station",
+                        "Stacja paliw",
+                        "00:00-24:00",
+                        true,
+                        arenaLat + 0.0025,
+                        arenaLon + 0.0005
+                )
+        );
+
+        points.add(
+                new SafePoint(
+                        "shop",
+                        "Sklep",
+                        "06:00-23:00",
+                        false,
+                        arenaLat - 0.0020,
+                        arenaLon + 0.0005
+                )
+        );
+
+        points.add(
+                new SafePoint(
+                        "public_transport",
+                        "Przystanek autobusowy",
+                        "00:00-24:00",
+                        true,
+                        arenaLat + 0.0005,
+                        arenaLon - 0.0025
+                )
+        );
+
+        points.add(
+                new SafePoint(
+                        "other",
+                        "Punkt bezpieczeństwa",
+                        "00:00-24:00",
+                        true,
+                        arenaLat - 0.0025,
+                        arenaLon - 0.0005
+                )
+        );
+
+        return points;
+    }
+
+    private Bitmap getSafePointBitmap(String category) {
+
+        String emoji;
+
+        switch (category) {
+
+            case "police":
+                emoji = "👮";
+                break;
+
+            case "hospital":
+                emoji = "🏥";
+                break;
+
+            case "fire_station":
+                emoji = "🚒";
+                break;
+
+            case "pharmacy":
+                emoji = "💊";
+                break;
+
+            case "fuel_station":
+                emoji = "⛽";
+                break;
+
+            case "shop":
+                emoji = "🛒";
+                break;
+
+            case "public_transport":
+                emoji = "🚌";
+                break;
+
+            default:
+                emoji = "📍";
+                break;
+        }
+
+        int size = 120;
+
+        Bitmap bitmap =
+                Bitmap.createBitmap(
+                        size,
+                        size,
+                        Bitmap.Config.ARGB_8888
+                );
+
+        Canvas canvas = new Canvas(bitmap);
+
+        Paint paint =
+                new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        paint.setTextSize(70);
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setTypeface(Typeface.DEFAULT);
+
+        canvas.drawText(
+                emoji,
+                size / 2f,
+                82,
+                paint
+        );
+
+        return bitmap;
+    }
+
+    private void updateSafePointMarkers() {
+
+        if (mapView == null) {
+            return;
+        }
+
+        AnnotationPlugin annotationPlugin =
+                mapView.getPlugin(
+                        Plugin.MAPBOX_ANNOTATION_PLUGIN_ID
+                );
+
+        if (annotationPlugin == null) {
+            return;
+        }
+
+        if (safePointAnnotationManager == null) {
+
+            safePointAnnotationManager =
+                    (PointAnnotationManager)
+                            annotationPlugin.createAnnotationManager(
+                                    AnnotationType.PointAnnotation,
+                                    new AnnotationConfig()
+                            );
+
+        } else {
+
+            safePointAnnotationManager.deleteAll();
+        }
+
+        safePointMap.clear();
+
+        List<SafePoint> points =
+                getExampleSafePoints();
+
+        for (SafePoint safePoint : points) {
+
+            Bitmap bitmap =
+                    getSafePointBitmap(
+                            safePoint.category
+                    );
+
+            PointAnnotationOptions options =
+                    new PointAnnotationOptions()
+                            .withPoint(
+                                    Point.fromLngLat(
+                                            safePoint.longitude,
+                                            safePoint.latitude
+                                    )
+                            )
+                            .withIconImage(bitmap)
+                            .withIconSize(0.8);
+
+            PointAnnotation annotation =
+                    safePointAnnotationManager.create(
+                            options
+                    );
+
+            safePointMap.put(
+                    annotation.getId(),
+                    safePoint
+            );
+        }
+
+        safePointAnnotationManager.addClickListener(
+                annotation -> {
+
+                    SafePoint point =
+                            safePointMap.get(
+                                    annotation.getId()
+                            );
+
+                    if (point != null) {
+
+                        showSafePointInfo(point);
+                    }
+
+                    return true;
+                }
+        );
+
+        updateSafePointLayerVisibility();
+    }
+
+    private void showSafePointInfo(SafePoint point) {
+
+        if (safePointInfoPanel == null) {
+            return;
+        }
+
+        safePointInfoTitle.setText(
+                getSafePointEmoji(point.category)
+                        + " "
+                        + point.name
+        );
+
+        safePointInfoName.setText(
+                "Nazwa: " + point.name
+        );
+
+        safePointInfoCategory.setText(
+                "Kategoria: "
+                        + getSafePointCategoryName(
+                        point.category
+                )
+        );
+
+        safePointInfoHours.setText(
+                "Godziny: "
+                        + point.openingHoursRaw
+        );
+
+        if (point.is24_7) {
+
+            safePointInfo247.setText(
+                    "🕐 Czynne 24/7"
+            );
+
+        } else {
+
+            safePointInfo247.setText(
+                    "🕐 Godziny ograniczone"
+            );
+        }
+
+        safePointInfoPanel.setVisibility(
+                View.VISIBLE
+        );
+    }
+
+    private String getSafePointCategoryName(
+            String category
+    ) {
+
+        switch (category) {
+
+            case "police":
+                return "Policja";
+
+            case "hospital":
+                return "Szpital";
+
+            case "fire_station":
+                return "Straż Pożarna";
+
+            case "pharmacy":
+                return "Apteka";
+
+            case "fuel_station":
+                return "Stacja paliw";
+
+            case "shop":
+                return "Sklep";
+
+            case "public_transport":
+                return "Transport publiczny";
+
+            default:
+                return "Inne";
+        }
+    }
+
+    private String getSafePointEmoji(
+            String category
+    ) {
+
+        switch (category) {
+
+            case "police":
+                return "👮";
+
+            case "hospital":
+                return "🏥";
+
+            case "fire_station":
+                return "🚒";
+
+            case "pharmacy":
+                return "💊";
+
+            case "fuel_station":
+                return "⛽";
+
+            case "shop":
+                return "🛒";
+
+            case "public_transport":
+                return "🚌";
+
+            default:
+                return "📍";
+        }
+    }
+
+    private List<HistoricalThreat> getExampleHistoricalThreats() {
+
+        double arenaLat = 50.0670;
+        double arenaLon = 19.9934;
+
+        List<HistoricalThreat> threats =
+                new ArrayList<>();
+
+        threats.add(
+                new HistoricalThreat(
+                        "Kradzież",
+                        "2026-09-12 21:30",
+                        0.35,
+                        arenaLat + 0.0015,
+                        arenaLon + 0.0010
+                )
+        );
+
+        threats.add(
+                new HistoricalThreat(
+                        "Napad",
+                        "2026-08-27 23:10",
+                        0.85,
+                        arenaLat - 0.0010,
+                        arenaLon + 0.0015
+                )
+        );
+
+        threats.add(
+                new HistoricalThreat(
+                        "Wandalizm",
+                        "2026-08-19 18:45",
+                        0.55,
+                        arenaLat + 0.0005,
+                        arenaLon - 0.0015
+                )
+        );
+
+        threats.add(
+                new HistoricalThreat(
+                        "Kradzież",
+                        "2026-07-30 20:15",
+                        0.25,
+                        arenaLat - 0.0015,
+                        arenaLon - 0.0010
+                )
+        );
+
+        threats.add(
+                new HistoricalThreat(
+                        "Napad",
+                        "2026-07-14 01:20",
+                        0.95,
+                        arenaLat + 0.0020,
+                        arenaLon - 0.0005
+                )
+        );
+
+        return threats;
+    }
+
+    private Bitmap getHistoricalThreatBitmap() {
+
+        int width = 100;
+        int height = 100;
+
+        Bitmap bitmap =
+                Bitmap.createBitmap(
+                        width,
+                        height,
+                        Bitmap.Config.ARGB_8888
+                );
+
+        Canvas canvas =
+                new Canvas(bitmap);
+
+        Paint paint =
+                new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        paint.setTextSize(75);
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setTypeface(Typeface.DEFAULT_BOLD);
+
+        canvas.drawText(
+                "⚠️",
+                width / 2f,
+                75,
+                paint
+        );
+
+        return bitmap;
+    }
+
+    private void updateHistoricalThreatMarkers() {
+
+        if (mapView == null) {
+            return;
+        }
+
+        AnnotationPlugin annotationPlugin =
+                mapView.getPlugin(
+                        Plugin.MAPBOX_ANNOTATION_PLUGIN_ID
+                );
+
+        if (annotationPlugin == null) {
+            return;
+        }
+
+        if (historicalThreatAnnotationManager == null) {
+
+            historicalThreatAnnotationManager =
+                    (PointAnnotationManager)
+                            annotationPlugin.createAnnotationManager(
+                                    AnnotationType.PointAnnotation,
+                                    new AnnotationConfig()
+                            );
+
+        } else {
+
+            historicalThreatAnnotationManager.deleteAll();
+        }
+
+        historicalThreatMap.clear();
+
+        Bitmap warningBitmap =
+                getHistoricalThreatBitmap();
+
+        if (warningBitmap == null) {
+            return;
+        }
+
+        List<HistoricalThreat> threats =
+                getExampleHistoricalThreats();
+
+        for (HistoricalThreat threat : threats) {
+
+            PointAnnotationOptions options =
+                    new PointAnnotationOptions()
+                            .withPoint(
+                                    Point.fromLngLat(
+                                            threat.longitude,
+                                            threat.latitude
+                                    )
+                            )
+                            .withIconImage(warningBitmap)
+                            .withIconSize(0.7);
+
+            PointAnnotation annotation =
+                    historicalThreatAnnotationManager.create(
+                            options
+                    );
+
+            historicalThreatMap.put(
+                    annotation.getId(),
+                    threat
+            );
+        }
+
+        historicalThreatAnnotationManager.addClickListener(
+                annotation -> {
+
+                    HistoricalThreat threat =
+                            historicalThreatMap.get(
+                                    annotation.getId()
+                            );
+
+                    if (threat != null) {
+                        showHistoricalThreatInfo(threat);
+                    }
+
+                    return true;
+                }
+        );
+
+        updateHistoricalThreatLayerVisibility();
+    }
+
+    private void showHistoricalThreatInfo(
+            HistoricalThreat threat
+    ) {
+
+        // Ukryj inne panele
+        if (safePointInfoPanel != null) {
+            safePointInfoPanel.setVisibility(View.GONE);
+        }
+
+        if (reportInfoPanel != null) {
+            reportInfoPanel.setVisibility(View.GONE);
+        }
+
+        String severityText;
+
+        if (threat.severity < 0.33) {
+            severityText = "Niskie";
+        } else if (threat.severity < 0.66) {
+            severityText = "Średnie";
+        } else {
+            severityText = "Wysokie";
+        }
+
+        historicalThreatInfoCategory.setText(
+                "Kategoria: " + threat.category
+        );
+
+        historicalThreatInfoDate.setText(
+                "Data: " + threat.occuredAt
+        );
+
+        historicalThreatInfoSeverity.setText(
+                "⚠️ Poziom zagrożenia: " + severityText
+        );
+
+        historicalThreatInfoScore.setText(
+                "Severity: "
+                        + String.format(
+                        Locale.US,
+                        "%.2f",
+                        threat.severity
+                )
+        );
+
+        historicalThreatInfoPanel.setVisibility(
+                View.VISIBLE
+        );
+    }
+
+    private void updateHistoricalThreatLayerVisibility() {
+
+        if (historicalThreatAnnotationManager == null) {
+            return;
+        }
+
+        historicalThreatAnnotationManager.setIconOpacity(
+                historicalThreatsLayerEnabled ? 1.0 : 0.0
+        );
+    }
+    private void updateSafePointLayerVisibility() {
+
+        if (safePointAnnotationManager == null) {
+            return;
+        }
+
+        safePointAnnotationManager.setIconOpacity(
+                safePointsLayerEnabled ? 1.0 : 0.0
+        );
     }
 
     // =========================================================
@@ -3001,5 +4255,221 @@ public class MapaFragment extends Fragment {
         dialog.setView(layout);
         if (dialog.getWindow() != null) dialog.getWindow().setBackgroundDrawable(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
         dialog.show();
+    }
+
+    private List<CityEvent> getExampleCityEvents() {
+
+        double arenaLat = 50.0670;
+        double arenaLon = 19.9934;
+
+        List<CityEvent> events = new ArrayList<>();
+
+        events.add(new CityEvent(
+                "Wielki mecz piłkarski",
+                "Duże wydarzenie sportowe. Możliwe zwiększone natężenie ruchu oraz ryzyko incydentów.",
+                "Mecz sportowy",
+                "2026-10-12 18:00",
+                "2026-10-12 22:30",
+                arenaLat,
+                arenaLon,
+                1500,
+                0.25
+        ));
+
+        return events;
+    }
+
+    private Bitmap getCityEventBitmap() {
+
+        int width = 100;
+        int height = 100;
+
+        Bitmap bitmap =
+                Bitmap.createBitmap(
+                        width,
+                        height,
+                        Bitmap.Config.ARGB_8888
+                );
+
+        Canvas canvas = new Canvas(bitmap);
+
+        Paint paint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+        paint.setColor(
+                android.graphics.Color.rgb(156, 39, 176)
+        );
+
+        canvas.drawCircle(
+                width / 2f,
+                height / 2f,
+                42,
+                paint
+        );
+
+        paint.setColor(android.graphics.Color.WHITE);
+        paint.setTextSize(48);
+        paint.setTextAlign(Paint.Align.CENTER);
+        paint.setTypeface(Typeface.DEFAULT_BOLD);
+
+        canvas.drawText(
+                "!",
+                width / 2f,
+                67,
+                paint
+        );
+
+        return bitmap;
+    }
+
+    private void updateCityEventMarkers() {
+
+        if (mapView == null) {
+            return;
+        }
+
+        AnnotationPlugin annotationPlugin =
+                mapView.getPlugin(
+                        Plugin.MAPBOX_ANNOTATION_PLUGIN_ID
+                );
+
+        if (annotationPlugin == null) {
+            return;
+        }
+
+        if (cityEventAnnotationManager == null) {
+
+            cityEventAnnotationManager =
+                    (PointAnnotationManager)
+                            annotationPlugin.createAnnotationManager(
+                                    AnnotationType.PointAnnotation,
+                                    new AnnotationConfig()
+                            );
+
+        } else {
+
+            cityEventAnnotationManager.deleteAll();
+        }
+
+        cityEventMap.clear();
+
+        Bitmap eventBitmap =
+                getCityEventBitmap();
+
+        if (eventBitmap == null) {
+            return;
+        }
+
+        List<CityEvent> events =
+                getExampleCityEvents();
+
+        for (CityEvent event : events) {
+
+            PointAnnotationOptions options =
+                    new PointAnnotationOptions()
+                            .withPoint(
+                                    Point.fromLngLat(
+                                            event.longitude,
+                                            event.latitude
+                                    )
+                            )
+                            .withIconImage(eventBitmap)
+                            .withIconSize(0.7);
+
+            PointAnnotation annotation =
+                    cityEventAnnotationManager.create(
+                            options
+                    );
+
+            cityEventMap.put(
+                    annotation.getId(),
+                    event
+            );
+        }
+
+        cityEventAnnotationManager.addClickListener(
+                annotation -> {
+
+                    CityEvent event =
+                            cityEventMap.get(
+                                    annotation.getId()
+                            );
+
+                    if (event != null) {
+                        showCityEventInfo(event);
+                    }
+
+                    return true;
+                }
+        );
+
+        updateCityEventLayerVisibility();
+    }
+
+    private void showCityEventInfo(
+            CityEvent event
+    ) {
+
+        if (safePointInfoPanel != null) {
+            safePointInfoPanel.setVisibility(
+                    View.GONE
+            );
+        }
+
+        if (reportInfoPanel != null) {
+            reportInfoPanel.setVisibility(
+                    View.GONE
+            );
+        }
+
+        if (historicalThreatInfoPanel != null) {
+            historicalThreatInfoPanel.setVisibility(
+                    View.GONE
+            );
+        }
+
+        cityEventInfoTitle.setText(
+                "🏟️ " + event.title
+        );
+
+        cityEventInfoCategory.setText(
+                "Kategoria: " + event.category
+        );
+
+        cityEventInfoDescription.setText(
+                event.description
+        );
+
+        cityEventInfoDate.setText(
+                "📅 " + event.startsAt
+                        + " – "
+                        + event.endsAt
+        );
+
+        cityEventInfoRisk.setText(
+                "⚠️ Wpływ na bezpieczeństwo: +"
+                        + String.format(
+                        Locale.US,
+                        "%.0f",
+                        event.riskIncrease * 100
+                )
+                        + "%"
+        );
+
+        cityEventInfoPanel.setVisibility(
+                View.VISIBLE
+        );
+    }
+
+    private void updateCityEventLayerVisibility() {
+
+        if (cityEventAnnotationManager == null) {
+            return;
+        }
+
+        cityEventAnnotationManager.setIconOpacity(
+                cityEventsLayerEnabled
+                        ? 1.0
+                        : 0.0
+        );
     }
 }
