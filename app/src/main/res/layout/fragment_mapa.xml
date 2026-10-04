@@ -3,7 +3,8 @@
     xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
-    android:layout_height="match_parent">
+    android:layout_height="match_parent"
+    android:background="#2C2C2C">
 
     <!-- MAPA -->
     <com.mapbox.maps.MapView
@@ -11,7 +12,7 @@
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         app:mapbox_locationComponentEnabled="true"
-        app:mapbox_compassEnabled="false" />
+        app:mapbox_compassEnabled="true" />
 
     <!-- WYSZUKIWANIE -->
     <LinearLayout
@@ -24,6 +25,7 @@
         android:gravity="center_vertical"
         android:padding="6dp"
         android:background="@drawable/search_background"
+        android:backgroundTint="#3A3A3A"
         android:elevation="8dp">
 
         <ImageButton
@@ -32,7 +34,7 @@
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
             android:src="@android:drawable/ic_menu_myplaces"
-            app:tint="#4CAF50"
+            app:tint="#FF028D"
             android:contentDescription="Zapisane miejsca" />
 
         <EditText
@@ -42,6 +44,8 @@
             android:layout_weight="1"
             android:background="@android:color/transparent"
             android:hint="Dokąd chcesz iść?"
+            android:textColor="#FFFFFF"
+            android:textColorHint="#999999"
             android:paddingStart="14dp"
             android:paddingEnd="8dp"
             android:singleLine="true"
@@ -51,6 +55,8 @@
             android:id="@+id/search_button"
             android:layout_width="wrap_content"
             android:layout_height="48dp"
+            android:backgroundTint="#FF028D"
+            android:textColor="#FFFFFF"
             android:text="Szukaj"
             android:textAllCaps="false"
             android:textSize="14sp" />
@@ -67,6 +73,7 @@
         android:layout_marginEnd="16dp"
         android:orientation="vertical"
         android:background="@drawable/navigation_steps_background"
+        android:backgroundTint="#3A3A3A"
         android:elevation="8dp"
         android:visibility="gone">
 
@@ -88,6 +95,7 @@
                 android:layout_height="46dp"
                 android:gravity="center"
                 android:text="→"
+                android:textColor="#FF028D"
                 android:textSize="28sp"
                 android:textStyle="bold" />
 
@@ -103,6 +111,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:text="Skręć w prawo"
+                    android:textColor="#FFFFFF"
                     android:textSize="16sp"
                     android:textStyle="bold" />
 
@@ -112,6 +121,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="2dp"
                     android:text="za 180 m"
+                    android:textColor="#CCCCCC"
                     android:textSize="13sp" />
 
             </LinearLayout>
@@ -122,6 +132,7 @@
                 android:layout_height="40dp"
                 android:gravity="center"
                 android:text="⌄"
+                android:textColor="#FFFFFF"
                 android:textSize="24sp" />
 
         </LinearLayout>
@@ -151,6 +162,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="🛡 Bezpieczna  •  2,4 km  •  9 min"
+                android:textColor="#CCCCCC"
                 android:textSize="13sp" />
 
             <Button
@@ -187,7 +199,7 @@
         android:textAllCaps="false"
         android:elevation="8dp"
         app:cornerRadius="26dp"
-        app:backgroundTint="#2196F3"
+        app:backgroundTint="#3A3A3A"
         android:contentDescription="Warstwy mapy" />
 
     <!-- PANEL WARSTW WYSUWANY OD DOŁU -->
@@ -202,6 +214,7 @@
         android:paddingEnd="16dp"
         android:paddingBottom="20dp"
         android:background="@drawable/bottom_panel_background"
+        android:backgroundTint="#323232"
         android:elevation="20dp"
         android:visibility="gone">
 
@@ -211,7 +224,7 @@
             android:layout_height="4dp"
             android:layout_gravity="center"
             android:layout_marginBottom="12dp"
-            android:background="@drawable/panel_handle" />
+            android:background="#555555" />
 
         <!-- NAGŁÓWEK -->
         <LinearLayout
@@ -225,6 +238,7 @@
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
                 android:text="🗂️ Warstwy mapy"
+                android:textColor="#FF028D"
                 android:textSize="20sp"
                 android:textStyle="bold" />
 
@@ -232,6 +246,8 @@
                 android:id="@+id/layer_close"
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"
+                android:backgroundTint="#444444"
+                android:textColor="#FFFFFF"
                 android:text="Zamknij"
                 android:textAllCaps="false" />
 
@@ -260,6 +276,7 @@
                     android:id="@+id/layer_lighting"
                     android:layout_width="64dp"
                     android:layout_height="64dp"
+                    android:backgroundTint="#3A3A3A"
                     android:text="💡"
                     android:textSize="26sp"
                     android:textAllCaps="false"
@@ -272,6 +289,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Światło"
+                    android:textColor="#CCCCCC"
                     android:textSize="11sp"
                     android:textAlignment="center"
                     android:gravity="center" />
@@ -291,6 +309,7 @@
                     android:id="@+id/layer_safe_points"
                     android:layout_width="64dp"
                     android:layout_height="64dp"
+                    android:backgroundTint="#3A3A3A"
                     android:text="🛡"
                     android:textSize="26sp"
                     android:textAllCaps="false"
@@ -303,6 +322,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Bezpieczne punkty"
+                    android:textColor="#CCCCCC"
                     android:textSize="11sp"
                     android:textAlignment="center"
                     android:gravity="center" />
@@ -322,6 +342,7 @@
                     android:id="@+id/layer_cameras"
                     android:layout_width="64dp"
                     android:layout_height="64dp"
+                    android:backgroundTint="#3A3A3A"
                     android:text="📷"
                     android:textSize="26sp"
                     android:textAllCaps="false"
@@ -334,6 +355,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Kamery"
+                    android:textColor="#CCCCCC"
                     android:textSize="11sp"
                     android:textAlignment="center"
                     android:gravity="center" />
@@ -365,6 +387,7 @@
                     android:id="@+id/layer_historical"
                     android:layout_width="64dp"
                     android:layout_height="64dp"
+                    android:backgroundTint="#3A3A3A"
                     android:text="🕰"
                     android:textSize="26sp"
                     android:textAllCaps="false"
@@ -377,6 +400,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Historyczne zagrożenia"
+                    android:textColor="#CCCCCC"
                     android:textSize="11sp"
                     android:textAlignment="center"
                     android:gravity="center" />
@@ -396,6 +420,7 @@
                     android:id="@+id/layer_user_reports"
                     android:layout_width="64dp"
                     android:layout_height="64dp"
+                    android:backgroundTint="#3A3A3A"
                     android:text="🚨"
                     android:textSize="26sp"
                     android:textAllCaps="false"
@@ -408,6 +433,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Zgłoszenia użytkowników"
+                    android:textColor="#CCCCCC"
                     android:textSize="11sp"
                     android:textAlignment="center"
                     android:gravity="center" />
@@ -427,6 +453,7 @@
                     android:id="@+id/layer_city_events"
                     android:layout_width="64dp"
                     android:layout_height="64dp"
+                    android:backgroundTint="#4E1C51"
                     android:text="🏟"
                     android:textSize="26sp"
                     android:textAllCaps="false"
@@ -439,6 +466,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="4dp"
                     android:text="Wydarzenia w mieście"
+                    android:textColor="#CCCCCC"
                     android:textSize="11sp"
                     android:textAlignment="center"
                     android:gravity="center" />
@@ -478,6 +506,7 @@
         android:orientation="vertical"
         android:padding="16dp"
         android:background="@drawable/report_info_background"
+        android:backgroundTint="#323232"
         android:elevation="12dp"
         android:visibility="gone">
 
@@ -487,6 +516,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="🛡 Bezpieczny punkt"
+            android:textColor="#FFFFFF"
             android:textSize="18sp"
             android:textStyle="bold" />
 
@@ -497,6 +527,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:text="Nazwa:"
+            android:textColor="#FFFFFF"
             android:textSize="15sp"
             android:textStyle="bold" />
 
@@ -507,6 +538,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:text="Kategoria:"
+            android:textColor="#CCCCCC"
             android:textSize="14sp" />
 
         <!-- GODZINY -->
@@ -516,6 +548,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:text="Godziny:"
+            android:textColor="#CCCCCC"
             android:textSize="14sp" />
 
         <!-- 24/7 -->
@@ -525,6 +558,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:text="🕐 Czynne 24/7"
+            android:textColor="#4CAF50"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -535,6 +569,8 @@
             android:layout_height="40dp"
             android:layout_gravity="end"
             android:layout_marginTop="10dp"
+            android:backgroundTint="#444444"
+            android:textColor="#FFFFFF"
             android:text="Zamknij"
             android:textAllCaps="false" />
 
@@ -549,6 +585,7 @@
         android:orientation="vertical"
         android:padding="16dp"
         android:background="@drawable/report_info_background"
+        android:backgroundTint="#323232"
         android:elevation="12dp"
         android:visibility="gone">
 
@@ -557,6 +594,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="🏟️ Wydarzenie w mieście"
+            android:textColor="#FFFFFF"
             android:textSize="18sp"
             android:textStyle="bold" />
 
@@ -566,6 +604,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:text="Kategoria:"
+            android:textColor="#CCCCCC"
             android:textSize="14sp" />
 
         <TextView
@@ -574,6 +613,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="Opis:"
+            android:textColor="#CCCCCC"
             android:textSize="14sp" />
 
         <TextView
@@ -582,6 +622,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="📅 Data:"
+            android:textColor="#CCCCCC"
             android:textSize="14sp" />
 
         <TextView
@@ -590,6 +631,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:text="⚠️ Wpływ na bezpieczeństwo: +25%"
+            android:textColor="#FF9800"
             android:textSize="14sp"
             android:textStyle="bold" />
 
@@ -599,12 +641,13 @@
             android:layout_height="40dp"
             android:layout_gravity="end"
             android:layout_marginTop="10dp"
+            android:backgroundTint="#444444"
+            android:textColor="#FFFFFF"
             android:text="Zamknij"
             android:textAllCaps="false" />
 
     </LinearLayout>
 
-    <!-- INFORMACJE O HISTORYCZNYM ZAGROŻENIU -->
     <LinearLayout
         android:id="@+id/historical_threat_info_panel"
         android:layout_width="300dp"
@@ -613,68 +656,69 @@
         android:orientation="vertical"
         android:padding="16dp"
         android:background="@drawable/report_info_background"
+        android:backgroundTint="#323232"
         android:elevation="12dp"
         android:visibility="gone">
 
-        <!-- TYTUŁ -->
         <TextView
             android:id="@+id/historical_threat_info_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="⚠️ Historyczne zagrożenie"
+            android:textColor="#FFFFFF"
             android:textSize="18sp"
             android:textStyle="bold" />
 
-        <!-- KATEGORIA -->
         <TextView
             android:id="@+id/historical_threat_info_category"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:text="Kategoria:"
+            android:textColor="#CCCCCC"
             android:textSize="14sp" />
 
-        <!-- DATA -->
         <TextView
             android:id="@+id/historical_threat_info_date"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:text="Data:"
+            android:textColor="#CCCCCC"
             android:textSize="14sp" />
 
-        <!-- POZIOM ZAGROŻENIA -->
         <TextView
             android:id="@+id/historical_threat_info_severity"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:text="🔴 Poziom zagrożenia:"
+            android:textColor="#FFFFFF"
             android:textSize="14sp"
             android:textStyle="bold" />
 
-        <!-- WARTOŚĆ SEVERITY -->
         <TextView
             android:id="@+id/historical_threat_info_score"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:text="Severity: 0.85"
+            android:textColor="#CCCCCC"
             android:textSize="13sp" />
 
-        <!-- ZAMKNIJ -->
         <Button
             android:id="@+id/historical_threat_info_close"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:layout_gravity="end"
             android:layout_marginTop="10dp"
+            android:backgroundTint="#444444"
+            android:textColor="#FFFFFF"
             android:text="Zamknij"
             android:textAllCaps="false" />
 
     </LinearLayout>
 
-    <!-- INFORMACJE O ZGŁOSZENIU -->
     <LinearLayout
         android:id="@+id/report_info_panel"
         android:layout_width="300dp"
@@ -683,56 +727,56 @@
         android:orientation="vertical"
         android:padding="16dp"
         android:background="@drawable/report_info_background"
+        android:backgroundTint="#323232"
         android:elevation="12dp"
         android:visibility="gone">
 
-        <!-- TYTUŁ -->
         <TextView
             android:id="@+id/report_info_title"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="⚠️ Zgłoszone zagrożenie"
+            android:textColor="#FFFFFF"
             android:textSize="18sp"
             android:textStyle="bold" />
 
-        <!-- KATEGORIA -->
         <TextView
             android:id="@+id/report_info_category"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:text="Kategoria:"
+            android:textColor="#CCCCCC"
             android:textSize="14sp" />
 
-        <!-- CZAS -->
         <TextView
             android:id="@+id/report_info_time"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
             android:text="Godzina:"
+            android:textColor="#CCCCCC"
             android:textSize="14sp" />
 
-        <!-- POTWIERDZENIA -->
         <TextView
             android:id="@+id/report_info_confirmations"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="👥 Potwierdzone przez 4 osoby"
+            android:textColor="#CCCCCC"
             android:textSize="14sp"
             android:textStyle="bold" />
 
-        <!-- PYTANIE -->
         <TextView
             android:id="@+id/report_info_question"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
             android:text="Czy nadal występuje tutaj zagrożenie?"
+            android:textColor="#FFFFFF"
             android:textSize="14sp" />
 
-        <!-- PRZYCISKI -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -745,6 +789,8 @@
                 android:layout_height="48dp"
                 android:layout_weight="1"
                 android:layout_marginEnd="4dp"
+                android:backgroundTint="#333333"
+                android:textColor="#FFFFFF"
                 android:text="👍"
                 android:textAllCaps="false"
                 android:textSize="13sp" />
@@ -755,34 +801,36 @@
                 android:layout_height="48dp"
                 android:layout_weight="1"
                 android:layout_marginStart="4dp"
+                android:backgroundTint="#333333"
+                android:textColor="#FFFFFF"
                 android:text="👎"
                 android:textAllCaps="false"
                 android:textSize="13sp" />
 
         </LinearLayout>
 
-        <!-- ID -->
         <TextView
             android:id="@+id/report_info_id"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="ID:"
+            android:textColor="#888888"
             android:textSize="10sp" />
 
-        <!-- ZAMKNIJ -->
         <Button
             android:id="@+id/report_info_close"
             android:layout_width="wrap_content"
             android:layout_height="40dp"
             android:layout_gravity="end"
             android:layout_marginTop="4dp"
+            android:backgroundTint="#444444"
+            android:textColor="#FFFFFF"
             android:text="Zamknij"
             android:textAllCaps="false" />
 
     </LinearLayout>
 
-    <!-- PRZYCISK MOJEJ LOKALIZACJI -->
     <ImageButton
         android:id="@+id/location_button"
         android:layout_width="52dp"
@@ -790,12 +838,13 @@
         android:layout_gravity="end|center_vertical"
         android:layout_marginEnd="16dp"
         android:background="@drawable/map_button_background"
+        android:backgroundTint="#3A3A3A"
         android:contentDescription="Moja lokalizacja"
         android:elevation="8dp"
         android:padding="14dp"
+        app:tint="#FFFFFF"
         android:src="@android:drawable/ic_menu_mylocation" />
 
-    <!-- WYBÓR RODZAJU TRASY -->
     <HorizontalScrollView
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
@@ -815,6 +864,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"
                 android:layout_marginEnd="8dp"
+                android:backgroundTint="#3A3A3A"
+                android:textColor="#FFFFFF"
                 android:text="🛡 Najbezpieczniejsza"
                 android:textAllCaps="false" />
 
@@ -823,6 +874,8 @@
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"
                 android:layout_marginEnd="8dp"
+                android:backgroundTint="#3A3A3A"
+                android:textColor="#FFFFFF"
                 android:text="⚡ Najszybsza"
                 android:textAllCaps="false" />
 
@@ -830,6 +883,8 @@
                 android:id="@+id/balanced_route_button"
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"
+                android:backgroundTint="#3A3A3A"
+                android:textColor="#FFFFFF"
                 android:text="⚖ Zbalansowana"
                 android:textAllCaps="false" />
 
@@ -837,7 +892,6 @@
 
     </HorizontalScrollView>
 
-    <!-- INFORMACJE O TRASIE -->
     <LinearLayout
         android:id="@+id/route_info_panel"
         android:layout_width="match_parent"
@@ -849,51 +903,52 @@
         android:paddingEnd="20dp"
         android:paddingBottom="16dp"
         android:background="@drawable/bottom_panel_background"
+        android:backgroundTint="#323232"
         android:elevation="12dp">
 
-        <!-- TYTUŁ -->
         <TextView
             android:id="@+id/route_title"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Planowanie trasy"
+            android:textColor="#FF028D"
             android:textSize="20sp"
             android:textStyle="bold" />
 
-        <!-- START -->
         <TextView
             android:id="@+id/start_point"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="10dp"
             android:text="📍 Start: moja lokalizacja"
+            android:textColor="#FFFFFF"
             android:textSize="15sp" />
 
-        <!-- CEL -->
         <TextView
             android:id="@+id/destination_point"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="6dp"
             android:text="🏁 Cel: nie wybrano"
+            android:textColor="#CCCCCC"
             android:textSize="15sp" />
 
-        <!-- INFORMACJA -->
         <TextView
             android:id="@+id/route_details"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="Wybierz miejsce docelowe, aby wyznaczyć trasę."
+            android:textColor="#888888"
             android:textSize="14sp" />
 
-        <!-- BEZPIECZEŃSTWO -->
         <TextView
             android:id="@+id/safety_status"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
             android:text="🛡 Poziom bezpieczeństwa: —"
+            android:textColor="#4CAF50"
             android:textSize="14sp"
             android:textStyle="bold" />
 
