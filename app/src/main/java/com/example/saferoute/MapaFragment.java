@@ -2727,11 +2727,7 @@ public class MapaFragment extends Fragment {
                 );
 
                 separator.setBackgroundColor(
-                        android.graphics.Color.rgb(
-                                238,
-                                238,
-                                238
-                        )
+                        android.graphics.Color.parseColor("#4e1c51")
                 );
 
                 navigationAllSteps.addView(
@@ -3072,11 +3068,7 @@ public class MapaFragment extends Fragment {
 
             button.setBackgroundTintList(
                     android.content.res.ColorStateList.valueOf(
-                            android.graphics.Color.rgb(
-                                    33,
-                                    150,
-                                    243
-                            )
+                            android.graphics.Color.parseColor("#4e1c51")
                     )
             );
 
