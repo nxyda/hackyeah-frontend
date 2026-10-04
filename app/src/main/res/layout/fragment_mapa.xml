@@ -938,7 +938,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"
                 android:layout_marginEnd="8dp"
-                android:text="🛡 Najbezpieczniejsza"
+                android:text="🛡 Najlepsza"
                 android:textAllCaps="false" />
 
             <Button
@@ -953,7 +953,7 @@
                 android:id="@+id/balanced_route_button"
                 android:layout_width="wrap_content"
                 android:layout_height="48dp"
-                android:text="⚖ Zbalansowana"
+                android:text="⚖ Alternatywna"
                 android:textAllCaps="false" />
 
         </LinearLayout>

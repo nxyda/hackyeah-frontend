@@ -13,16 +13,28 @@ public interface ApiService {
 
     @GET("v1/safe-places/nearby")
     Call<List<SafePlace>> getNearbySafePlaces(
-            @Query("lat") double latitude,
             @Query("lon") double longitude,
+            @Query("lat") double latitude,
             @Query("radius_m") double radius
     );
 
     @GET("v1/cameras/nearby")
     Call<List<Camera>> getNearbyCameras(
-            @Query("longitude") double longitude,
-            @Query("latitude") double latitude,
+            @Query("lon") double longitude,
+            @Query("lat") double latitude,
             @Query("radius_m") double radius
+    );
+
+    @GET("v1/street-lamps/nearby")
+    Call<List<StreetLamp>> getNearbyStreetLamps(
+            @Query("lon") double longitude,
+            @Query("lat") double latitude,
+            @Query("radius_m") double radius
+    );
+
+    @GET("v1/street-lamps/{street_lamp_id}")
+    Call<StreetLamp> getStreetLamp(
+            @Path("street_lamp_id") int streetLampId
     );
 
     @GET("v1/cameras/{camera_id}")
@@ -32,8 +44,8 @@ public interface ApiService {
 
     @GET("v1/crime-events/nearby")
     Call<List<CrimeEvent>> getNearbyCrimeEvents(
-            @Query("longitude") double longitude,
-            @Query("latitude") double latitude,
+            @Query("lon") double longitude,
+            @Query("lat") double latitude,
             @Query("radius_m") double radius,
             @Query("occurred_after") String occurredAfter,
             @Query("occurred_before") String occurredBefore
