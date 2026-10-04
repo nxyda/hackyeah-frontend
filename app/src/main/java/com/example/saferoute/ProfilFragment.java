@@ -55,6 +55,14 @@ public class ProfilFragment extends Fragment {
 
         // Znajdowanie widoków profilu
         TextView tvPhoneStatus = view.findViewById(R.id.tv_phone_status);
+        TextView tvTrustScore = view.findViewById(R.id.tv_trust_score);
+        TextView tvTrustBreakdown = view.findViewById(R.id.tv_trust_breakdown);
+        tvTrustScore.setText(String.valueOf(TrustScore.getScore(requireContext())));
+        tvTrustBreakdown.setText(
+                TrustScore.getReportsCreated(requireContext()) + " zgłoszeń  |  "
+                        + TrustScore.getLikes(requireContext()) + " polubień  |  "
+                        + TrustScore.getDislikes(requireContext()) + " oznaczeń"
+        );
         EditText etNick = view.findViewById(R.id.et_nickname);
         EditText etPhone = view.findViewById(R.id.et_phone);
         Button btnVerifyPhone = view.findViewById(R.id.btn_verify_phone);

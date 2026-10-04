@@ -1558,6 +1558,7 @@ public class MapaFragment extends Fragment {
                 0
         );
         reports.add(report);
+        TrustScore.recordReportCreated(requireContext());
         updateReportMarkers();
         Toast.makeText(
                 requireContext(),
@@ -1607,9 +1608,7 @@ public class MapaFragment extends Fragment {
         if (!isAdded() || report == null) {
             return;
         }
-        SharedPreferences preferences = reportPreferences();
-        String key = reactionKey(report.id);
-        if (preferences.contains(key)) {
+        if (reportPreferences().contains(reactionKey(report.id))) {
             Toast.makeText(
                     requireContext(),
                     "Na to zgłoszenie można zareagować tylko raz.",
@@ -1621,7 +1620,14 @@ public class MapaFragment extends Fragment {
             Toast.makeText(requireContext(), "To zgłoszenie wygasło po godzinie bez potwierdzeń.", Toast.LENGTH_SHORT).show();
             return;
         }
-        preferences.edit().putString(key, reaction).apply();
+        if (!TrustScore.recordReaction(requireContext(), report.id, reaction)) {
+            Toast.makeText(
+                    requireContext(),
+                    "Na to zgłoszenie można zareagować tylko raz.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
         if ("like".equals(reaction)) {
             report.confirmations++;
         }
