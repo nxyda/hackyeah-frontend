@@ -14,9 +14,22 @@ public class RouteResponse {
         public double distance_m;
         public double safety_score;
         public String explanation;
+        public List<NavigationStep> navigation_steps;
     }
 
     public static class Geometry {
         public List<List<Double>> coordinates;
+    }
+
+    public static class NavigationStep {
+        public String instruction;
+        public String maneuver;
+        public double distance_m;
+        public Coordinate location;
+    }
+
+    public static class Coordinate {
+        public double lat;
+        public double lon;
     }
 }
