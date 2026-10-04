@@ -2870,6 +2870,12 @@ public class MapaFragment extends Fragment {
             List<NavigationStep> steps
     ) {
 
+        if (isNavigating) {
+            routeOptionsPanel.setVisibility(View.GONE);
+            routeInfoPanel.setVisibility(View.GONE);
+            startNavigationButton.setVisibility(View.GONE);
+        }
+
         currentNavigationSteps.clear();
 
         if (steps == null || steps.isEmpty()) {
@@ -3019,6 +3025,10 @@ public class MapaFragment extends Fragment {
         currentNavigationStepIndex = 0;
 
         isNavigating = true;
+
+        routeInfoPanel.setVisibility(View.GONE);
+        routeOptionsPanel.setVisibility(View.GONE);
+        startNavigationButton.setVisibility(View.GONE);
 
         navigationVibrationTriggered = false;
 
