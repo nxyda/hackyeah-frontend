@@ -14,6 +14,8 @@ if (localPropertiesFile.exists()) {
 
 val mapboxAccessToken = localProperties.getProperty("MAPBOX_ACCESS_TOKEN")
     ?: ""
+val apiBaseUrl = localProperties.getProperty("API_BASE_URL")
+    ?: "http://10.0.2.2:8000/"
 
 android {
     namespace = "com.example.saferoute"
@@ -39,6 +41,12 @@ android {
             "String",
             "MAPBOX_ACCESS_TOKEN",
             "\"$mapboxAccessToken\""
+        )
+
+        buildConfigField(
+            "String",
+            "API_BASE_URL",
+            "\"${apiBaseUrl.replace("\\", "\\\\").replace("\"", "\\\"")}\""
         )
 
         val geminiKey = localProperties.getProperty("GEMINI_API_KEY") ?: ""

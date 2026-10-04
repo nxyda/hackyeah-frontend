@@ -1,5 +1,7 @@
 package com.example.saferoute.api;
 
+import com.example.saferoute.BuildConfig;
+
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.OkHttpClient;
@@ -8,8 +10,6 @@ import retrofit2.converter.gson.GsonConverterFactory;
 
 public class RetrofitClient {
 
-    private static final String BASE_URL = "http://10.250.163.116:8000/";
-
     private static final OkHttpClient httpClient = new OkHttpClient.Builder()
             .connectTimeout(15, TimeUnit.SECONDS)
             .readTimeout(90, TimeUnit.SECONDS)
@@ -17,7 +17,7 @@ public class RetrofitClient {
             .build();
 
     private static final Retrofit retrofit = new Retrofit.Builder()
-            .baseUrl(BASE_URL)
+            .baseUrl(BuildConfig.API_BASE_URL)
             .client(httpClient)
             .addConverterFactory(GsonConverterFactory.create())
             .build();
