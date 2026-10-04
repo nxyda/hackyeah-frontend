@@ -80,6 +80,8 @@ import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 
 import com.example.saferoute.api.ApiService;
+import com.example.saferoute.api.Camera;
+import com.example.saferoute.api.CrimeEvent;
 import com.example.saferoute.api.RetrofitClient;
 import com.example.saferoute.api.SafePlace;
 import com.example.saferoute.api.RouteRequest;
@@ -323,6 +325,10 @@ public class MapaFragment extends Fragment {
     private boolean camerasLayerEnabled = true;
     private PointAnnotationManager cameraAnnotationManager;
 
+    private PointAnnotationManager crimeEventAnnotationManager;
+    private Map<String, CrimeEvent> crimeEventMap =
+            new HashMap<>();
+
     private boolean userReportsLayerEnabled = true;
 
     private PointAnnotationManager historicalThreatAnnotationManager;
@@ -500,6 +506,83 @@ public class MapaFragment extends Fragment {
         });
     }
 
+    private void loadNearbyCameras(Point point) {
+
+        ApiService apiService = RetrofitClient.getApiService();
+
+        Call<List<Camera>> call = apiService.getNearbyCameras(
+                point.longitude(),
+                point.latitude(),
+                1000
+        );
+
+        call.enqueue(new Callback<List<Camera>>() {
+
+            @Override
+            public void onResponse(
+                    Call<List<Camera>> call,
+                    Response<List<Camera>> response
+            ) {
+                if (response.isSuccessful() && response.body() != null) {
+                    updateCameraMarkers(response.body());
+                } else {
+                    System.out.println("Błąd API kamer: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(
+                    Call<List<Camera>> call,
+                    Throwable t
+            ) {
+                System.out.println("Błąd połączenia z API kamer: " + t.getMessage());
+            }
+        });
+    }
+
+    private void loadNearbyCrimeEvents(Point point) {
+
+        ApiService apiService = RetrofitClient.getApiService();
+
+        Call<List<CrimeEvent>> call = apiService.getNearbyCrimeEvents(
+                point.longitude(),
+                point.latitude(),
+                1000,
+                null,
+                null
+        );
+
+        call.enqueue(new Callback<List<CrimeEvent>>() {
+
+            @Override
+            public void onResponse(
+                    Call<List<CrimeEvent>> call,
+                    Response<List<CrimeEvent>> response
+            ) {
+                if (response.isSuccessful() && response.body() != null) {
+                    System.out.println(
+                            "Crime events z API: " + response.body().size()
+                    );
+                    updateCrimeEventMarkers(response.body());
+                } else {
+                    System.out.println(
+                            "Błąd API crime events: " + response.code()
+                    );
+                }
+            }
+
+            @Override
+            public void onFailure(
+                    Call<List<CrimeEvent>> call,
+                    Throwable t
+            ) {
+                System.out.println(
+                        "Błąd połączenia z API crime events: " + t.getMessage()
+                );
+            }
+        });
+    }
+
     // =========================================================
     // LISTENER GPS
     // =========================================================
@@ -528,6 +611,8 @@ public class MapaFragment extends Fragment {
                     firstLocationReceived = true;
 
                     loadNearbySafePlaces(point);
+                    loadNearbyCameras(point);
+                    loadNearbyCrimeEvents(point);
 
                     mapView.getMapboxMap().setCamera(
                             new CameraOptions.Builder().center(point).zoom(14.0).build()
@@ -3614,7 +3699,7 @@ public class MapaFragment extends Fragment {
         return bitmap;
     }
 
-    private void updateCameraMarkers() {
+    private void updateCameraMarkers(List<Camera> cameras) {
 
         if (mapView == null) {
             return;
@@ -3661,83 +3746,20 @@ public class MapaFragment extends Fragment {
             return;
         }
 
-        // ============================================
-        // TAURON ARENA KRAKÓW
-        //
-        // 50.0670, 19.9934
-        // ============================================
+        for (Camera camera : cameras) {
+            PointAnnotationOptions options =
+                    new PointAnnotationOptions()
+                            .withPoint(
+                                    Point.fromLngLat(
+                                            camera.getLongitude(),
+                                            camera.getLatitude()
+                                    )
+                            )
+                            .withIconImage(cameraBitmap)
+                            .withIconSize(1.0);
 
-        double arenaLat = 50.0670;
-        double arenaLon = 19.9934;
-
-        // ============================================
-        // KAMERA 1
-        // ============================================
-
-        PointAnnotationOptions camera1 =
-                new PointAnnotationOptions()
-                        .withPoint(
-                                Point.fromLngLat(
-                                        arenaLon + 0.0010,
-                                        arenaLat + 0.0010
-                                )
-                        )
-                        .withIconImage(cameraBitmap)
-                        .withIconSize(1.0);
-
-        // ============================================
-        // KAMERA 2
-        // ============================================
-
-        PointAnnotationOptions camera2 =
-                new PointAnnotationOptions()
-                        .withPoint(
-                                Point.fromLngLat(
-                                        arenaLon - 0.0010,
-                                        arenaLat + 0.0010
-                                )
-                        )
-                        .withIconImage(cameraBitmap)
-                        .withIconSize(1.0);
-
-        // ============================================
-        // KAMERA 3
-        // ============================================
-
-        PointAnnotationOptions camera3 =
-                new PointAnnotationOptions()
-                        .withPoint(
-                                Point.fromLngLat(
-                                        arenaLon + 0.0010,
-                                        arenaLat - 0.0010
-                                )
-                        )
-                        .withIconImage(cameraBitmap)
-                        .withIconSize(1.0);
-
-        // ============================================
-        // KAMERA 4
-        // ============================================
-
-        PointAnnotationOptions camera4 =
-                new PointAnnotationOptions()
-                        .withPoint(
-                                Point.fromLngLat(
-                                        arenaLon - 0.0010,
-                                        arenaLat - 0.0010
-                                )
-                        )
-                        .withIconImage(cameraBitmap)
-                        .withIconSize(1.0);
-
-        // ============================================
-        // DODAJ KAMERY
-        // ============================================
-
-        cameraAnnotationManager.create(camera1);
-        cameraAnnotationManager.create(camera2);
-        cameraAnnotationManager.create(camera3);
-        cameraAnnotationManager.create(camera4);
+            cameraAnnotationManager.create(options);
+        }
 
         // ============================================
         // WIDOCZNOŚĆ
@@ -3754,6 +3776,127 @@ public class MapaFragment extends Fragment {
 
         cameraAnnotationManager.setIconOpacity(
                 camerasLayerEnabled ? 1.0 : 0.0
+        );
+    }
+
+    private void updateCrimeEventMarkers(List<CrimeEvent> events) {
+
+        if (mapView == null) {
+            return;
+        }
+
+        AnnotationPlugin annotationPlugin =
+                mapView.getPlugin(
+                        Plugin.MAPBOX_ANNOTATION_PLUGIN_ID
+                );
+
+        if (annotationPlugin == null) {
+            return;
+        }
+
+        if (crimeEventAnnotationManager == null) {
+            crimeEventAnnotationManager =
+                    (PointAnnotationManager)
+                            annotationPlugin.createAnnotationManager(
+                                    AnnotationType.PointAnnotation,
+                                    new AnnotationConfig()
+                            );
+        } else {
+            crimeEventAnnotationManager.deleteAll();
+        }
+
+        crimeEventMap.clear();
+
+        Bitmap warningBitmap = getHistoricalThreatBitmap();
+
+        if (warningBitmap == null) {
+            return;
+        }
+
+        for (CrimeEvent event : events) {
+            PointAnnotationOptions options =
+                    new PointAnnotationOptions()
+                            .withPoint(
+                                    Point.fromLngLat(
+                                            event.getLongitude(),
+                                            event.getLatitude()
+                                    )
+                            )
+                            .withIconImage(warningBitmap)
+                            .withIconSize(0.7);
+
+            PointAnnotation annotation =
+                    crimeEventAnnotationManager.create(options);
+
+            crimeEventMap.put(annotation.getId(), event);
+        }
+
+        crimeEventAnnotationManager.addClickListener(
+                annotation -> {
+                    CrimeEvent event =
+                            crimeEventMap.get(annotation.getId());
+
+                    if (event != null) {
+                        showCrimeEventInfo(event);
+                    }
+
+                    return true;
+                }
+        );
+
+        updateCrimeEventLayerVisibility();
+    }
+
+    private void showCrimeEventInfo(CrimeEvent event) {
+
+        if (safePointInfoPanel != null) {
+            safePointInfoPanel.setVisibility(View.GONE);
+        }
+
+        if (reportInfoPanel != null) {
+            reportInfoPanel.setVisibility(View.GONE);
+        }
+
+        historicalThreatInfoCategory.setText(
+                "Kategoria: " + event.getCategory()
+        );
+        historicalThreatInfoDate.setText(
+                "Data: " + event.getOccurred_at()
+        );
+
+        Double severity = event.getSeverity();
+        String severityText = severity == null
+                ? "Brak danych"
+                : severity < 0.33
+                        ? "Niskie"
+                        : severity < 0.66
+                                ? "Średnie"
+                                : "Wysokie";
+
+        historicalThreatInfoSeverity.setText(
+                "⚠️ Poziom zagrożenia: " + severityText
+        );
+        historicalThreatInfoScore.setText(
+                "Źródło: " + event.getSource()
+                        + "\nOdległość: "
+                        + String.format(
+                        Locale.US,
+                        "%.0f m",
+                        event.getDistance_m()
+                )
+        );
+
+        historicalThreatInfoPanel.setVisibility(View.VISIBLE);
+    }
+
+    private void updateCrimeEventLayerVisibility() {
+
+        if (crimeEventAnnotationManager == null) {
+            return;
+        }
+
+        crimeEventAnnotationManager.setIconOpacity(
+                historicalThreatsLayerEnabled ? 1.0 : 0.0
         );
     }
 
@@ -4394,13 +4537,13 @@ public class MapaFragment extends Fragment {
 
     private void updateHistoricalThreatLayerVisibility() {
 
-        if (historicalThreatAnnotationManager == null) {
-            return;
+        if (historicalThreatAnnotationManager != null) {
+            historicalThreatAnnotationManager.setIconOpacity(
+                    historicalThreatsLayerEnabled ? 1.0 : 0.0
+            );
         }
 
-        historicalThreatAnnotationManager.setIconOpacity(
-                historicalThreatsLayerEnabled ? 1.0 : 0.0
-        );
+        updateCrimeEventLayerVisibility();
     }
     private void updateSafePointLayerVisibility() {
 

@@ -1,3 +1,11 @@
-<resources>
+<resources
+    xmlns:tools="http://schemas.android.com/tools">
+
     <string name="app_name">SafeRoute</string>
+
+    <string
+        name="mapbox_access_token"
+        translatable="false"
+        tools:ignore="UnusedResources">pk.eyJ1IjoibmF0YWxpYXAxIiwiYSI6ImNtdXNhZ29lZDAwdG0yeHMxdGsxbm8ycTQifQ.bqLczNm0VUia4xnOvjrPUQ</string>
+
 </resources>
