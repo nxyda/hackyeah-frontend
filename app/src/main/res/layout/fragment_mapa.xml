@@ -33,7 +33,7 @@
             android:layout_width="48dp"
             android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless"
-            android:src="@android:drawable/ic_menu_myplaces"
+            android:src="@drawable/ic_places"
             app:tint="#FF028D"
             android:contentDescription="Zapisane miejsca" />
 

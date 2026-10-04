@@ -1567,7 +1567,7 @@ public class MapaFragment extends Fragment {
 
             TextView mark = new TextView(requireContext());
             mark.setText("✓");
-            mark.setTextColor(android.graphics.Color.parseColor("#65D98B"));
+            mark.setTextColor(android.graphics.Color.parseColor("#FF028D"));
             mark.setTextSize(17);
             mark.setTypeface(null, Typeface.BOLD);
             mark.setGravity(Gravity.CENTER);
@@ -1609,7 +1609,7 @@ public class MapaFragment extends Fragment {
         submit.setTypeface(null, Typeface.BOLD);
         submit.setAllCaps(false);
         submit.setPadding(dp(14), 0, dp(14), 0);
-        submit.setBackground(roundedBackground("#2E9D5B", dp(12)));
+        submit.setBackground(roundedBackground("#FF028D", dp(12)));
         LinearLayout.LayoutParams submitParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT,
                 dp(46)
@@ -1645,7 +1645,7 @@ public class MapaFragment extends Fragment {
         for (int i = 0; i < rows.size(); i++) {
             boolean selected = i == selectedIndex;
             rows.get(i).setBackground(roundedBackground(
-                    selected ? "#303B34" : "#292929",
+                    selected ? "#472b40" : "#292929",
                     dp(12)
             ));
             marks.get(i).setVisibility(selected ? View.VISIBLE : View.INVISIBLE);
@@ -1687,10 +1687,10 @@ public class MapaFragment extends Fragment {
         }
 
         SimpleDateFormat format = new SimpleDateFormat(
-                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                "dd.MM.yyyy, HH:mm",
                 Locale.US
         );
-        format.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        format.setTimeZone(java.util.TimeZone.getTimeZone("Europe/Warsaw"));
         Report report = new Report(
                 UUID.randomUUID().toString(),
                 currentLocation.latitude(),
@@ -2051,9 +2051,7 @@ public class MapaFragment extends Fragment {
 
         selectedReportForFeedback = report;
 
-        reportInfoCategory.setText(
-                "Kategoria: " + report.category
-        );
+        reportInfoCategory.setText("Kategoria: " + getCategoryPolishName(report.category));
 
         reportInfoTime.setText(
                 "Godzina: " + report.createdAt
@@ -5303,5 +5301,17 @@ public class MapaFragment extends Fragment {
                         ? 1.0
                         : 0.0
         );
+    }
+    private String getCategoryPolishName(String category) {
+        if (category == null) return "Inne";
+        switch (category) {
+            case "danger": return "Niebezpieczeństwo";
+            case "harassment": return "Nękanie";
+            case "poor_lighting": return "Słabe oświetlenie";
+            case "blocked_path": return "Zablokowana droga";
+            case "suspicious_activity": return "Podejrzana aktywność";
+            case "other": return "Inne";
+            default: return category;
+        }
     }
 }
