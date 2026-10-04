@@ -84,6 +84,7 @@ import com.example.saferoute.api.Camera;
 import com.example.saferoute.api.CrimeEvent;
 import com.example.saferoute.api.RetrofitClient;
 import com.example.saferoute.api.SafePlace;
+import com.example.saferoute.api.StreetLamp;
 import com.example.saferoute.api.RouteRequest;
 import com.example.saferoute.api.RouteResponse;
 
@@ -274,6 +275,16 @@ public class MapaFragment extends Fragment {
 
     private static final String REPORT_LAYER_ID =
             "reports-layer";
+
+    private static final String STREET_LAMPS_SOURCE_ID =
+            "street-lamps-source";
+
+    private static final String STREET_LAMPS_LAYER_ID =
+            "street-lamps-heatmap";
+
+    private static final double CITY_LAYERS_RADIUS_METERS = 1000.0;
+    private static final int MAX_POINT_ANNOTATIONS = 2000;
+    private static final int MAX_HEATMAP_POINTS = 12000;
 
     private final List<Report> reports =
             new ArrayList<>();
@@ -473,9 +484,9 @@ public class MapaFragment extends Fragment {
         ApiService apiService = RetrofitClient.getApiService();
 
         Call<List<SafePlace>> call = apiService.getNearbySafePlaces(
-                point.latitude(),
                 point.longitude(),
-                1000
+                point.latitude(),
+                CITY_LAYERS_RADIUS_METERS
         );
 
         call.enqueue(new Callback<List<SafePlace>>() {
@@ -488,6 +499,9 @@ public class MapaFragment extends Fragment {
                 if (response.isSuccessful() && response.body() != null) {
 
                     List<SafePlace> places = response.body();
+                    System.out.println(
+                            "Safe places z API: " + places.size()
+                    );
 
                     updateSafePointMarkers(places);
 
@@ -513,7 +527,7 @@ public class MapaFragment extends Fragment {
         Call<List<Camera>> call = apiService.getNearbyCameras(
                 point.longitude(),
                 point.latitude(),
-                1000
+                CITY_LAYERS_RADIUS_METERS
         );
 
         call.enqueue(new Callback<List<Camera>>() {
@@ -524,6 +538,9 @@ public class MapaFragment extends Fragment {
                     Response<List<Camera>> response
             ) {
                 if (response.isSuccessful() && response.body() != null) {
+                    System.out.println(
+                            "Kamery z API: " + response.body().size()
+                    );
                     updateCameraMarkers(response.body());
                 } else {
                     System.out.println("Błąd API kamer: " + response.code());
@@ -540,6 +557,47 @@ public class MapaFragment extends Fragment {
         });
     }
 
+    private void loadNearbyStreetLamps(Point point) {
+
+        ApiService apiService = RetrofitClient.getApiService();
+
+        Call<List<StreetLamp>> call = apiService.getNearbyStreetLamps(
+                point.longitude(),
+                point.latitude(),
+                CITY_LAYERS_RADIUS_METERS
+        );
+
+        call.enqueue(new Callback<List<StreetLamp>>() {
+
+            @Override
+            public void onResponse(
+                    Call<List<StreetLamp>> call,
+                    Response<List<StreetLamp>> response
+            ) {
+                if (response.isSuccessful() && response.body() != null) {
+                    System.out.println(
+                            "Latarnie z API: " + response.body().size()
+                    );
+                    updateStreetLampMarkers(response.body());
+                } else {
+                    System.out.println(
+                            "Błąd API latarni: " + response.code()
+                    );
+                }
+            }
+
+            @Override
+            public void onFailure(
+                    Call<List<StreetLamp>> call,
+                    Throwable t
+            ) {
+                System.out.println(
+                        "Błąd połączenia z API latarni: " + t.getMessage()
+                );
+            }
+        });
+    }
+
     private void loadNearbyCrimeEvents(Point point) {
 
         ApiService apiService = RetrofitClient.getApiService();
@@ -547,7 +605,7 @@ public class MapaFragment extends Fragment {
         Call<List<CrimeEvent>> call = apiService.getNearbyCrimeEvents(
                 point.longitude(),
                 point.latitude(),
-                1000,
+                CITY_LAYERS_RADIUS_METERS,
                 null,
                 null
         );
@@ -612,6 +670,7 @@ public class MapaFragment extends Fragment {
 
                     loadNearbySafePlaces(point);
                     loadNearbyCameras(point);
+                    loadNearbyStreetLamps(point);
                     loadNearbyCrimeEvents(point);
 
                     mapView.getMapboxMap().setCamera(
@@ -1344,8 +1403,7 @@ public class MapaFragment extends Fragment {
                     lightingLayerEnabled =
                             (boolean) layerLighting.getTag();
 
-                    // tutaj później pokażemy/ukryjemy
-                    // warstwę natężenia światła
+                    updateStreetLampLayerVisibility();
                 }
         );
 
@@ -2073,7 +2131,7 @@ public class MapaFragment extends Fragment {
 
     private void drawSafeRoute() {
         displayRoute(currentRouteResponse == null ? null : currentRouteResponse.safest,
-                "🛡 Wybrano trasę bezpieczną", "🛡 Poziom bezpieczeństwa: Wysoki");
+                "🛡 Wybrano najlepszą trasę", "🛡 Wynik wg ustawionej wagi");
     }
 
     // =========================================================
@@ -2099,8 +2157,8 @@ public class MapaFragment extends Fragment {
         if (balanced == null && currentRouteResponse != null) {
             balanced = currentRouteResponse.safest;
         }
-        displayRoute(balanced, "⚖ Wybrano trasę zbalansowaną",
-                "🛡 Poziom bezpieczeństwa: Dobry");
+        displayRoute(balanced, "⚖ Wybrano alternatywną trasę",
+                "🛡 Alternatywny wariant");
     }
 
     private void geocodeAndCreateRoute(String destination) {
@@ -2179,6 +2237,12 @@ public class MapaFragment extends Fragment {
 
     private void requestRoute(Point start, Point end, int searchGeneration) {
         routeDetails.setText("Wyznaczanie trasy… może potrwać do 90 sekund.");
+        System.out.println(
+                "Route request: start lat=" + start.latitude()
+                        + ", lon=" + start.longitude()
+                        + "; end lat=" + end.latitude()
+                        + ", lon=" + end.longitude()
+        );
         routeCall = RetrofitClient.getApiService().createRoute(
                 new RouteRequest(start.latitude(), start.longitude(),
                         end.latitude(), end.longitude()));
@@ -2750,6 +2814,17 @@ public class MapaFragment extends Fragment {
 
         if (mapView != null) {
             mapView.onStart();
+
+            if (ActivityCompat.checkSelfPermission(
+                    requireContext(),
+                    Manifest.permission.ACCESS_FINE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED
+                    || ActivityCompat.checkSelfPermission(
+                    requireContext(),
+                    Manifest.permission.ACCESS_COARSE_LOCATION
+            ) == PackageManager.PERMISSION_GRANTED) {
+                enableLocation();
+            }
         }
     }
 
@@ -3715,6 +3790,7 @@ public class MapaFragment extends Fragment {
                 );
 
         if (annotationPlugin == null) {
+            System.out.println("Brak Mapbox AnnotationPlugin dla kamer");
             return;
         }
 
@@ -3743,10 +3819,13 @@ public class MapaFragment extends Fragment {
         Bitmap cameraBitmap = getCameraBitmap();
 
         if (cameraBitmap == null) {
+            System.out.println("Brak ikony kamer");
             return;
         }
 
-        for (Camera camera : cameras) {
+        int renderedCameras = Math.min(cameras.size(), MAX_POINT_ANNOTATIONS);
+        for (int i = 0; i < renderedCameras; i++) {
+            Camera camera = cameras.get(i);
             PointAnnotationOptions options =
                     new PointAnnotationOptions()
                             .withPoint(
@@ -3776,6 +3855,114 @@ public class MapaFragment extends Fragment {
 
         cameraAnnotationManager.setIconOpacity(
                 camerasLayerEnabled ? 1.0 : 0.0
+        );
+    }
+
+    private void updateStreetLampMarkers(List<StreetLamp> streetLamps) {
+
+        if (mapView == null) {
+            return;
+        }
+
+        StringBuilder features = new StringBuilder("[");
+        int pointStep = Math.max(
+                1,
+                (streetLamps.size() + MAX_HEATMAP_POINTS - 1)
+                        / MAX_HEATMAP_POINTS
+        );
+        boolean firstFeature = true;
+
+        for (int i = 0; i < streetLamps.size(); i += pointStep) {
+            StreetLamp streetLamp = streetLamps.get(i);
+
+            if (!firstFeature) {
+                features.append(",");
+            }
+            firstFeature = false;
+
+            features.append("{\"type\":\"Feature\",\"geometry\":{")
+                    .append("\"type\":\"Point\",\"coordinates\":[")
+                    .append(streetLamp.getLongitude())
+                    .append(",")
+                    .append(streetLamp.getLatitude())
+                    .append("]}}");
+        }
+
+        features.append("]");
+
+        String sourceJson =
+                "{\"type\":\"geojson\",\"data\":{"
+                        + "\"type\":\"FeatureCollection\",\"features\":"
+                        + features
+                        + "}}";
+
+        String layerJson =
+                "{\"id\":\"" + STREET_LAMPS_LAYER_ID + "\","
+                        + "\"type\":\"heatmap\","
+                        + "\"source\":\"" + STREET_LAMPS_SOURCE_ID + "\","
+                        + "\"maxzoom\":22,"
+                        + "\"paint\":{"
+                        + "\"heatmap-radius\":[\"interpolate\",[\"linear\"],[\"zoom\"],"
+                        + "10,10,14,16,18,24,22,30],"
+                        + "\"heatmap-intensity\":[\"interpolate\",[\"linear\"],[\"zoom\"],"
+                        + "10,0.7,14,0.95,18,1.2,22,1.35],"
+                        + "\"heatmap-color\":[\"interpolate\",[\"linear\"],"
+                        + "[\"heatmap-density\"],"
+                        + "0,\"rgba(255,224,102,0)\","
+                        + "0.15,\"rgba(255,235,140,0.28)\","
+                        + "0.35,\"rgba(255,225,80,0.46)\","
+                        + "0.6,\"rgba(255,190,35,0.66)\","
+                        + "0.85,\"rgba(255,155,20,0.82)\","
+                        + "1,\"rgba(235,105,10,0.9)\"],"
+                        + "\"heatmap-opacity\":0.86"
+                        + "}}";
+
+        mapView.getMapboxMap().getStyle(style -> {
+            try {
+                style.removeStyleLayer(STREET_LAMPS_LAYER_ID);
+                style.removeStyleSource(STREET_LAMPS_SOURCE_ID);
+            } catch (Exception ignored) {
+            }
+
+            Expected<String, Value> sourceExpected =
+                    Value.fromJson(sourceJson);
+            Expected<String, Value> layerExpected =
+                    Value.fromJson(layerJson);
+
+            if (sourceExpected.isError() || layerExpected.isError()) {
+                System.out.println("Błąd tworzenia heatmapy latarni");
+                return;
+            }
+
+            style.addStyleSource(
+                    STREET_LAMPS_SOURCE_ID,
+                    sourceExpected.getValue()
+            );
+            style.addStyleLayer(
+                    layerExpected.getValue(),
+                    null
+            );
+
+            updateStreetLampLayerVisibility();
+        });
+    }
+
+    private void updateStreetLampLayerVisibility() {
+
+        if (mapView == null) {
+            return;
+        }
+
+        mapView.getMapboxMap().getStyle(style ->
+                style.setStyleLayerProperty(
+                        STREET_LAMPS_LAYER_ID,
+                        "visibility",
+                        Value.valueOf(
+                                lightingLayerEnabled
+                                        ? "visible"
+                                        : "none"
+                        )
+                )
         );
     }
 
@@ -3813,7 +4000,9 @@ public class MapaFragment extends Fragment {
             return;
         }
 
-        for (CrimeEvent event : events) {
+        int renderedEvents = Math.min(events.size(), MAX_POINT_ANNOTATIONS);
+        for (int i = 0; i < renderedEvents; i++) {
+            CrimeEvent event = events.get(i);
             PointAnnotationOptions options =
                     new PointAnnotationOptions()
                             .withPoint(
@@ -4122,7 +4311,9 @@ public class MapaFragment extends Fragment {
 
         apiSafePlaceMap.clear();
 
-        for (SafePlace safePlace : places) {
+        int renderedPlaces = Math.min(places.size(), MAX_POINT_ANNOTATIONS);
+        for (int i = 0; i < renderedPlaces; i++) {
+            SafePlace safePlace = places.get(i);
 
             Bitmap bitmap =
                     getSafePointBitmap(
