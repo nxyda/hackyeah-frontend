@@ -77,6 +77,16 @@
                     android:textSize="15sp"
                     android:textStyle="bold" />
             </LinearLayout>
+        <LinearLayout
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:orientation="vertical"
+            android:gravity="center">
+            <TextView android:id="@+id/tv_trust_score" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="0" android:textColor="#4CAF50" android:textSize="48sp" android:textStyle="bold" />
+            <TextView android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="Trust Score" android:textColor="#AAAAAA" android:textSize="14sp" />
+            <TextView android:id="@+id/tv_trust_breakdown" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:gravity="center" android:text="0 zgłoszeń  ·  0 polubień  ·  0 oznaczeń" android:textColor="#AAAAAA" android:textSize="11sp" />
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4dp" android:gravity="center" android:text="+5 zgłoszenie  |  +2 👍" android:textColor="#777777" android:textSize="10sp" />
         </LinearLayout>
 
         <LinearLayout

@@ -2,11 +2,14 @@ package com.example.saferoute;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -26,6 +29,10 @@ import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 import android.location.Location;
+import android.location.Address;
+import android.location.Geocoder;
+import android.os.Handler;
+import android.os.Looper;
 
 import com.mapbox.bindgen.Expected;
 import com.mapbox.bindgen.Value;
@@ -71,6 +78,25 @@ import android.os.VibrationEffect;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
+
+import com.example.saferoute.api.ApiService;
+import com.example.saferoute.api.Camera;
+import com.example.saferoute.api.CrimeEvent;
+import com.example.saferoute.api.RetrofitClient;
+import com.example.saferoute.api.SafePlace;
+import com.example.saferoute.api.RouteRequest;
+import com.example.saferoute.api.RouteResponse;
+
+import java.io.IOException;
+import java.net.SocketTimeoutException;
+import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
 
 import androidx.core.content.ContextCompat;
 
@@ -125,6 +151,9 @@ public class MapaFragment extends Fragment {
     private Button safeRouteButton;
     private Button fastRouteButton;
     private Button balancedRouteButton;
+    private Button startNavigationButton;
+    private View routeInfoPanel;
+    private View routeOptionsPanel;
 
     // =========================================================
     // ZGŁOSZENIE
@@ -204,6 +233,28 @@ public class MapaFragment extends Fragment {
 
     private Point destinationLocation;
 
+    private RouteResponse currentRouteResponse;
+    private RouteResponse.RouteOption selectedRoute;
+    private String selectedRouteName;
+    private ExecutorService geocoderExecutor;
+    private Call<RouteResponse> routeCall;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private int routeSearchGeneration = 0;
+    private final Runnable reportExpiryCleanup = new Runnable() {
+        @Override
+        public void run() {
+            if (!isAdded() || mapView == null) {
+                return;
+            }
+            int previousSize = reports.size();
+            reports.removeIf(MapaFragment.this::isLocallyExpired);
+            if (reports.size() != previousSize) {
+                updateReportMarkers();
+            }
+            mainHandler.postDelayed(this, 30_000L);
+        }
+    };
+
     // =========================================================
     // TRASA
     // =========================================================
@@ -246,9 +297,9 @@ public class MapaFragment extends Fragment {
 
     private static final double VIBRATION_DISTANCE_METERS = 30.0;
 
-    private int currentReportConfirmations = 4;
-
-    private boolean currentReportConfirmed = false;
+    private Report selectedReportForFeedback;
+    private static final String REPORT_PREFS = "SafeRouteReportPrefs";
+    private static final long REPORT_EXPIRY_MS = 60L * 60L * 1000L;
 
     private boolean lightingLayerEnabled = true;
 
@@ -268,8 +319,15 @@ public class MapaFragment extends Fragment {
     private Map<String, SafePoint> safePointMap =
             new HashMap<>();
 
+    private Map<String, SafePlace> apiSafePlaceMap =
+            new HashMap<>();
+
     private boolean camerasLayerEnabled = true;
     private PointAnnotationManager cameraAnnotationManager;
+
+    private PointAnnotationManager crimeEventAnnotationManager;
+    private Map<String, CrimeEvent> crimeEventMap =
+            new HashMap<>();
 
     private boolean userReportsLayerEnabled = true;
 
@@ -380,13 +438,17 @@ public class MapaFragment extends Fragment {
         String category;
 
         String createdAt;
+        String expiresAt;
+        int confirmations;
 
         Report(
                 String id,
                 double latitude,
                 double longitude,
                 String category,
-                String createdAt
+                String createdAt,
+                String expiresAt,
+                int confirmations
         ) {
 
             this.id = id;
@@ -398,7 +460,127 @@ public class MapaFragment extends Fragment {
             this.category = category;
 
             this.createdAt = createdAt;
+            this.expiresAt = expiresAt;
+            this.confirmations = confirmations;
         }
+    }
+
+    // =========================================================
+    // API SAFE PLACES
+    // =========================================================
+    private void loadNearbySafePlaces(Point point) {
+
+        ApiService apiService = RetrofitClient.getApiService();
+
+        Call<List<SafePlace>> call = apiService.getNearbySafePlaces(
+                point.latitude(),
+                point.longitude(),
+                1000
+        );
+
+        call.enqueue(new Callback<List<SafePlace>>() {
+
+            @Override
+            public void onResponse(
+                    Call<List<SafePlace>> call,
+                    Response<List<SafePlace>> response
+            ) {
+                if (response.isSuccessful() && response.body() != null) {
+
+                    List<SafePlace> places = response.body();
+
+                    updateSafePointMarkers(places);
+
+                } else {
+                    System.out.println("Błąd API: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(
+                    Call<List<SafePlace>> call,
+                    Throwable t
+            ) {
+                System.out.println("Błąd połączenia z API: " + t.getMessage());
+            }
+        });
+    }
+
+    private void loadNearbyCameras(Point point) {
+
+        ApiService apiService = RetrofitClient.getApiService();
+
+        Call<List<Camera>> call = apiService.getNearbyCameras(
+                point.longitude(),
+                point.latitude(),
+                1000
+        );
+
+        call.enqueue(new Callback<List<Camera>>() {
+
+            @Override
+            public void onResponse(
+                    Call<List<Camera>> call,
+                    Response<List<Camera>> response
+            ) {
+                if (response.isSuccessful() && response.body() != null) {
+                    updateCameraMarkers(response.body());
+                } else {
+                    System.out.println("Błąd API kamer: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(
+                    Call<List<Camera>> call,
+                    Throwable t
+            ) {
+                System.out.println("Błąd połączenia z API kamer: " + t.getMessage());
+            }
+        });
+    }
+
+    private void loadNearbyCrimeEvents(Point point) {
+
+        ApiService apiService = RetrofitClient.getApiService();
+
+        Call<List<CrimeEvent>> call = apiService.getNearbyCrimeEvents(
+                point.longitude(),
+                point.latitude(),
+                1000,
+                null,
+                null
+        );
+
+        call.enqueue(new Callback<List<CrimeEvent>>() {
+
+            @Override
+            public void onResponse(
+                    Call<List<CrimeEvent>> call,
+                    Response<List<CrimeEvent>> response
+            ) {
+                if (response.isSuccessful() && response.body() != null) {
+                    System.out.println(
+                            "Crime events z API: " + response.body().size()
+                    );
+                    updateCrimeEventMarkers(response.body());
+                } else {
+                    System.out.println(
+                            "Błąd API crime events: " + response.code()
+                    );
+                }
+            }
+
+            @Override
+            public void onFailure(
+                    Call<List<CrimeEvent>> call,
+                    Throwable t
+            ) {
+                System.out.println(
+                        "Błąd połączenia z API crime events: " + t.getMessage()
+                );
+            }
+        });
     }
 
     // =========================================================
@@ -427,6 +609,11 @@ public class MapaFragment extends Fragment {
                 } else if (!firstLocationReceived) {
                     // Pierwsze odpalenie aplikacji (centrowanie mapy)
                     firstLocationReceived = true;
+
+                    loadNearbySafePlaces(point);
+                    loadNearbyCameras(point);
+                    loadNearbyCrimeEvents(point);
+
                     mapView.getMapboxMap().setCamera(
                             new CameraOptions.Builder().center(point).zoom(14.0).build()
                     );
@@ -471,6 +658,7 @@ public class MapaFragment extends Fragment {
 
                                     if (expected == null
                                             || !expected.isValue()) {
+                                        showNearbyReportAt(point);
                                         return;
                                     }
 
@@ -480,6 +668,7 @@ public class MapaFragment extends Fragment {
 
                                     if (features == null
                                             || features.isEmpty()) {
+                                        showNearbyReportAt(point);
                                         return;
                                     }
 
@@ -491,6 +680,7 @@ public class MapaFragment extends Fragment {
                                             || queriedFeature
                                             .getQueriedFeature()
                                             == null) {
+                                        showNearbyReportAt(point);
                                         return;
                                     }
 
@@ -501,6 +691,7 @@ public class MapaFragment extends Fragment {
                                                     .getFeature();
 
                                     if (feature == null) {
+                                        showNearbyReportAt(point);
                                         return;
                                     }
 
@@ -509,26 +700,40 @@ public class MapaFragment extends Fragment {
                                                     "id"
                                             );
 
-                                    String category =
-                                            feature.getStringProperty(
-                                                    "category"
-                                            );
-
-                                    String createdAt =
-                                            feature.getStringProperty(
-                                                    "created_at"
-                                            );
-
-                                    showReportInfo(
-                                            reportId,
-                                            category,
-                                            createdAt
-                                    );
+                                    for (Report report : reports) {
+                                        if (report.id.equals(reportId)) {
+                                            showReportInfo(report);
+                                            return;
+                                        }
+                                    }
+                                    showNearbyReportAt(point);
                                 }
                         );
 
                 return true;
             };
+
+    private void showNearbyReportAt(Point tappedPoint) {
+        Report nearestReport = null;
+        float nearestDistance = 40f;
+        for (Report report : reports) {
+            float[] distance = new float[1];
+            Location.distanceBetween(
+                    tappedPoint.latitude(),
+                    tappedPoint.longitude(),
+                    report.latitude,
+                    report.longitude,
+                    distance
+            );
+            if (distance[0] <= nearestDistance) {
+                nearestDistance = distance[0];
+                nearestReport = report;
+            }
+        }
+        if (nearestReport != null) {
+            showReportInfo(nearestReport);
+        }
+    }
 
     // =========================================================
     // ON CREATE VIEW
@@ -549,6 +754,7 @@ public class MapaFragment extends Fragment {
                         false
                 );
 
+        geocoderExecutor = Executors.newSingleThreadExecutor();
         anomalyDetector = new AnomalyDetector(requireContext());
 
         // =====================================================
@@ -771,6 +977,12 @@ public class MapaFragment extends Fragment {
                         R.id.balanced_route_button
                 );
 
+        startNavigationButton =
+                view.findViewById(R.id.start_navigation_button);
+        startNavigationButton.setOnClickListener(v -> startNavigationForSelectedRoute());
+        routeInfoPanel = view.findViewById(R.id.route_info_panel);
+        routeOptionsPanel = view.findViewById(R.id.route_options_panel);
+
         // =====================================================
         // INFORMACJE O TRASIE
         // =====================================================
@@ -906,49 +1118,15 @@ public class MapaFragment extends Fragment {
         );
 
         reportInfoConfirm.setOnClickListener(v -> {
-
-            if (!currentReportConfirmed) {
-
-                currentReportConfirmations++;
-                currentReportConfirmed = true;
-
-                reportInfoConfirmations.setText(
-                        "👥 Potwierdzone przez "
-                                + currentReportConfirmations
-                                + " osoby"
-                );
-
-                reportInfoConfirm.setText(
-                        "✓"
-                );
-
-                // BLOKADA obu przycisków
-                reportInfoConfirm.setEnabled(false);
-                reportInfoInvalid.setEnabled(false);
-
-                Toast.makeText(
-                        requireContext(),
-                        "Potwierdzono zgłoszenie.",
-                        Toast.LENGTH_SHORT
-                ).show();
+            if (selectedReportForFeedback != null) {
+                saveReportReaction(selectedReportForFeedback, "like");
             }
         });
 
         reportInfoInvalid.setOnClickListener(v -> {
-
-            // BLOKADA obu przycisków
-            reportInfoConfirm.setEnabled(false);
-            reportInfoInvalid.setEnabled(false);
-
-            reportInfoInvalid.setText(
-                    "✓"
-            );
-
-            Toast.makeText(
-                    requireContext(),
-                    "Dzięki za aktualizację zgłoszenia.",
-                    Toast.LENGTH_SHORT
-            ).show();
+            if (selectedReportForFeedback != null) {
+                saveReportReaction(selectedReportForFeedback, "dislike");
+            }
         });
 
         reportInfoPanel.setVisibility(
@@ -998,12 +1176,6 @@ public class MapaFragment extends Fragment {
 
                             updateReportMarkers();
 
-                            updateCameraMarkers();
-
-                            updateSafePointMarkers();
-
-                            updateHistoricalThreatMarkers();
-
                             updateCityEventMarkers();
                         }
                 );
@@ -1042,38 +1214,10 @@ public class MapaFragment extends Fragment {
                 return;
             }
 
-            double startLng =
-                    currentLocation.longitude();
-
-            double startLat =
-                    currentLocation.latitude();
-
-            destinationLocation =
-                    Point.fromLngLat(
-                            startLng + 0.01,
-                            startLat + 0.005
-                    );
-
             destinationPoint.setText(
                     "🏁 Cel: " + destination
             );
-
-            routeDetails.setText(
-                    "Wyznaczono testową trasę."
-            );
-
-            safetyStatus.setText(
-                    "🛡 Wybierz rodzaj trasy."
-            );
-
-            drawSafeRoute();
-            showDemoNavigationSteps();
-
-            Toast.makeText(
-                    requireContext(),
-                    "Narysowano testową trasę.",
-                    Toast.LENGTH_SHORT
-            ).show();
+            geocodeAndCreateRoute(destination);
         });
 
         // =====================================================
@@ -1148,14 +1292,6 @@ public class MapaFragment extends Fragment {
             }
 
             drawSafeRoute();
-
-            routeDetails.setText(
-                    "🛡 Wybrano trasę bezpieczną"
-            );
-
-            safetyStatus.setText(
-                    "🛡 Poziom bezpieczeństwa: Wysoki"
-            );
         });
 
         // =====================================================
@@ -1177,14 +1313,6 @@ public class MapaFragment extends Fragment {
             }
 
             drawFastRoute();
-
-            routeDetails.setText(
-                    "⚡ Wybrano trasę szybką"
-            );
-
-            safetyStatus.setText(
-                    "🛡 Poziom bezpieczeństwa: Średni"
-            );
         });
 
         // =====================================================
@@ -1206,14 +1334,6 @@ public class MapaFragment extends Fragment {
             }
 
             drawBalancedRoute();
-
-            routeDetails.setText(
-                    "⚖ Wybrano trasę zbalansowaną"
-            );
-
-            safetyStatus.setText(
-                    "🛡 Poziom bezpieczeństwa: Dobry"
-            );
         });
 
         setupLayerButton(
@@ -1310,6 +1430,8 @@ public class MapaFragment extends Fragment {
             }
         });
 
+        mainHandler.removeCallbacks(reportExpiryCleanup);
+        mainHandler.postDelayed(reportExpiryCleanup, 30_000L);
 
         return view;
     }
@@ -1319,47 +1441,172 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private void showReportCategoryDialog() {
-
         String[] categoryValues = {
-
-                "danger",
-                "harassment",
-                "poor_lighting",
-                "blocked_path",
-                "suspicious_activity",
-                "other"
+                "danger", "harassment", "poor_lighting",
+                "blocked_path", "suspicious_activity", "other"
         };
-
         String[] categoryLabels = {
-
-                "Niebezpieczeństwo",
-                "Nękanie",
-                "Słabe oświetlenie",
-                "Zablokowana droga",
-                "Podejrzana aktywność",
-                "Inne"
+                "Niebezpieczeństwo", "Nękanie", "Słabe oświetlenie",
+                "Zablokowana droga", "Podejrzana aktywność", "Inne"
         };
+        String[] categoryIcons = {"⚠️", "🛑", "💡", "🚧", "👀", "📍"};
 
-        new AlertDialog.Builder(
-                requireContext()
-        )
-                .setTitle(
-                        "Dodaj zgłoszenie"
-                )
-                .setItems(
-                        categoryLabels,
-                        (dialog, which) -> {
+        int padding = dp(20);
+        LinearLayout content = new LinearLayout(requireContext());
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(padding, padding, padding, dp(12));
+        content.setBackground(roundedBackground("#1E1E1E", dp(20)));
 
-                            addReport(
-                                    categoryValues[which]
-                            );
-                        }
-                )
-                .setNegativeButton(
-                        "Anuluj",
-                        null
-                )
-                .show();
+        TextView title = new TextView(requireContext());
+        title.setText("Dodaj zgłoszenie");
+        title.setTextColor(android.graphics.Color.WHITE);
+        title.setTextSize(21);
+        title.setTypeface(null, Typeface.BOLD);
+        content.addView(title);
+
+        TextView subtitle = new TextView(requireContext());
+        subtitle.setText("Wybierz, co dzieje się w tej okolicy");
+        subtitle.setTextColor(android.graphics.Color.parseColor("#BDBDBD"));
+        subtitle.setTextSize(14);
+        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        subtitleParams.topMargin = dp(6);
+        subtitleParams.bottomMargin = dp(14);
+        content.addView(subtitle, subtitleParams);
+
+        LinearLayout categories = new LinearLayout(requireContext());
+        categories.setOrientation(LinearLayout.VERTICAL);
+        int[] selectedCategory = {0};
+        List<View> categoryRows = new ArrayList<>();
+        List<TextView> selectionMarks = new ArrayList<>();
+
+        for (int i = 0; i < categoryLabels.length; i++) {
+            final int index = i;
+            LinearLayout row = new LinearLayout(requireContext());
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(12), 0, dp(12), 0);
+            row.setMinimumHeight(dp(50));
+
+            TextView icon = new TextView(requireContext());
+            icon.setText(categoryIcons[i]);
+            icon.setTextSize(19);
+            icon.setGravity(Gravity.CENTER);
+            row.addView(icon, new LinearLayout.LayoutParams(dp(34), dp(42)));
+
+            TextView label = new TextView(requireContext());
+            label.setText(categoryLabels[i]);
+            label.setTextColor(android.graphics.Color.WHITE);
+            label.setTextSize(15);
+            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                    0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    1
+            );
+            labelParams.leftMargin = dp(8);
+            row.addView(label, labelParams);
+
+            TextView mark = new TextView(requireContext());
+            mark.setText("✓");
+            mark.setTextColor(android.graphics.Color.parseColor("#65D98B"));
+            mark.setTextSize(17);
+            mark.setTypeface(null, Typeface.BOLD);
+            mark.setGravity(Gravity.CENTER);
+            row.addView(mark, new LinearLayout.LayoutParams(dp(28), dp(42)));
+
+            categoryRows.add(row);
+            selectionMarks.add(mark);
+            row.setOnClickListener(v -> {
+                selectedCategory[0] = index;
+                updateReportCategorySelection(categoryRows, selectionMarks, selectedCategory[0]);
+            });
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(50)
+            );
+            if (i > 0) {
+                rowParams.topMargin = dp(5);
+            }
+            categories.addView(row, rowParams);
+        }
+        updateReportCategorySelection(categoryRows, selectionMarks, selectedCategory[0]);
+        content.addView(categories);
+
+        LinearLayout actions = new LinearLayout(requireContext());
+        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        actions.setPadding(0, dp(12), 0, 0);
+
+        Button cancel = new Button(requireContext());
+        cancel.setText("Anuluj");
+        cancel.setTextColor(android.graphics.Color.parseColor("#BDBDBD"));
+        cancel.setAllCaps(false);
+        cancel.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        actions.addView(cancel);
+
+        Button submit = new Button(requireContext());
+        submit.setText("Dodaj zgłoszenie");
+        submit.setTextColor(android.graphics.Color.WHITE);
+        submit.setTextSize(14);
+        submit.setTypeface(null, Typeface.BOLD);
+        submit.setAllCaps(false);
+        submit.setPadding(dp(14), 0, dp(14), 0);
+        submit.setBackground(roundedBackground("#2E9D5B", dp(12)));
+        LinearLayout.LayoutParams submitParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(46)
+        );
+        submitParams.leftMargin = dp(8);
+        actions.addView(submit, submitParams);
+        content.addView(actions);
+
+        AlertDialog dialog = new AlertDialog.Builder(requireContext()).create();
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        submit.setOnClickListener(v -> {
+            dialog.dismiss();
+            addReport(categoryValues[selectedCategory[0]]);
+        });
+        dialog.setView(content);
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(
+                    new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
+            );
+            dialog.getWindow().setLayout(
+                    Math.min(dp(380), getResources().getDisplayMetrics().widthPixels - dp(32)),
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+        }
+    }
+
+    private void updateReportCategorySelection(
+            List<View> rows,
+            List<TextView> marks,
+            int selectedIndex
+    ) {
+        for (int i = 0; i < rows.size(); i++) {
+            boolean selected = i == selectedIndex;
+            rows.get(i).setBackground(roundedBackground(
+                    selected ? "#303B34" : "#292929",
+                    dp(12)
+            ));
+            marks.get(i).setVisibility(selected ? View.VISIBLE : View.INVISIBLE);
+        }
+    }
+
+    private android.graphics.drawable.GradientDrawable roundedBackground(
+            String color,
+            int radius
+    ) {
+        android.graphics.drawable.GradientDrawable background =
+                new android.graphics.drawable.GradientDrawable();
+        background.setColor(android.graphics.Color.parseColor(color));
+        background.setCornerRadius(radius);
+        return background;
+    }
+
+    private int dp(float value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
     // =========================================================
@@ -1381,33 +1628,99 @@ public class MapaFragment extends Fragment {
             return;
         }
 
-        String reportId =
-                UUID.randomUUID().toString();
-
-        String createdAt =
-                new SimpleDateFormat(
-                        "yyyy-MM-dd HH:mm:ss",
-                        Locale.getDefault()
-                ).format(
-                        new Date()
-                );
-
-        Report report =
-                new Report(
-                        reportId,
-                        currentLocation.latitude(),
-                        currentLocation.longitude(),
-                        category,
-                        createdAt
-                );
-
+        SimpleDateFormat format = new SimpleDateFormat(
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                Locale.US
+        );
+        format.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        Report report = new Report(
+                UUID.randomUUID().toString(),
+                currentLocation.latitude(),
+                currentLocation.longitude(),
+                category,
+                format.format(new Date()),
+                null,
+                0
+        );
         reports.add(report);
-
+        TrustScore.recordReportCreated(requireContext());
         updateReportMarkers();
-
         Toast.makeText(
                 requireContext(),
-                "Dodano zgłoszenie",
+                "Dodano zgłoszenie na tym urządzeniu.",
+                Toast.LENGTH_SHORT
+        ).show();
+    }
+
+    private boolean isLocallyExpired(Report report) {
+        if (report.confirmations > 0) {
+            return false;
+        }
+        long expiresAt = parseApiTime(report.expiresAt);
+        if (expiresAt > 0) {
+            return expiresAt <= System.currentTimeMillis();
+        }
+        long createdAt = parseApiTime(report.createdAt);
+        return createdAt > 0
+                && System.currentTimeMillis() - createdAt >= REPORT_EXPIRY_MS;
+    }
+
+    private long parseApiTime(String value) {
+        if (value == null || value.length() < 19) {
+            return -1;
+        }
+        try {
+            SimpleDateFormat format = new SimpleDateFormat(
+                    "yyyy-MM-dd'T'HH:mm:ss",
+                    Locale.US
+            );
+            format.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+            return format.parse(value.substring(0, 19)).getTime();
+        } catch (java.text.ParseException exception) {
+            return -1;
+        }
+    }
+
+    private SharedPreferences reportPreferences() {
+        return requireContext().getSharedPreferences(REPORT_PREFS, Context.MODE_PRIVATE);
+    }
+
+    private String reactionKey(String reportId) {
+        return "reaction_" + reportId;
+    }
+
+    private void saveReportReaction(Report report, String reaction) {
+        if (!isAdded() || report == null) {
+            return;
+        }
+        if (reportPreferences().contains(reactionKey(report.id))) {
+            Toast.makeText(
+                    requireContext(),
+                    "Na to zgłoszenie można zareagować tylko raz.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+        if (isLocallyExpired(report) && report.confirmations <= 0) {
+            Toast.makeText(requireContext(), "To zgłoszenie wygasło po godzinie bez potwierdzeń.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (!TrustScore.recordReaction(requireContext(), report.id, reaction)) {
+            Toast.makeText(
+                    requireContext(),
+                    "Na to zgłoszenie można zareagować tylko raz.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+        if ("like".equals(reaction)) {
+            report.confirmations++;
+        }
+        showReportInfo(report);
+        updateReportMarkers();
+        Toast.makeText(
+                requireContext(),
+                "Reakcja zapisana na tym urządzeniu.",
                 Toast.LENGTH_SHORT
         ).show();
     }
@@ -1421,6 +1734,7 @@ public class MapaFragment extends Fragment {
         if (mapView == null) {
             return;
         }
+        reports.removeIf(this::isLocallyExpired);
 
         mapView.getMapboxMap().getStyle(
                 style -> {
@@ -1670,46 +1984,40 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private void showReportInfo(
-            String id,
-            String category,
-            String createdAt
+            Report report
     ) {
 
-        if (reportInfoPanel == null) {
+        if (reportInfoPanel == null || report == null) {
             return;
         }
 
-        currentReportConfirmations = 4;
-        currentReportConfirmed = false;
+        selectedReportForFeedback = report;
 
         reportInfoCategory.setText(
-                "Kategoria: " + category
+                "Kategoria: " + report.category
         );
 
         reportInfoTime.setText(
-                "Godzina: " + createdAt
+                "Godzina: " + report.createdAt
         );
 
         reportInfoId.setText(
-                "ID: " + id
+                "ID: " + report.id
         );
 
         reportInfoConfirmations.setText(
                 "👥 Potwierdzone przez "
-                        + currentReportConfirmations
+                        + report.confirmations
                         + " osoby"
         );
 
-        reportInfoConfirm.setText(
-                "👍"
-        );
-
-        reportInfoInvalid.setText(
-                "👎"
-        );
-
-        reportInfoConfirm.setEnabled(true);
-        reportInfoInvalid.setEnabled(true);
+        String reaction = reportPreferences().getString(reactionKey(report.id), null);
+        reportInfoConfirm.setText("like".equals(reaction) ? "✓" : "👍");
+        reportInfoInvalid.setText("dislike".equals(reaction) ? "✓" : "👎");
+        boolean canReact = reaction == null
+                && !(isLocallyExpired(report) && report.confirmations <= 0);
+        reportInfoConfirm.setEnabled(canReact);
+        reportInfoInvalid.setEnabled(canReact);
 
         reportInfoPanel.setVisibility(
                 View.VISIBLE
@@ -1766,62 +2074,8 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private void drawSafeRoute() {
-
-        if (currentLocation == null
-                || destinationLocation == null) {
-            return;
-        }
-
-        double startLng =
-                currentLocation.longitude();
-
-        double startLat =
-                currentLocation.latitude();
-
-        double endLng =
-                destinationLocation.longitude();
-
-        double endLat =
-                destinationLocation.latitude();
-
-        List<Point> points =
-                new ArrayList<>();
-
-        points.add(
-                Point.fromLngLat(
-                        startLng,
-                        startLat
-                )
-        );
-
-        points.add(
-                Point.fromLngLat(
-                        startLng + 0.002,
-                        startLat + 0.002
-                )
-        );
-
-        points.add(
-                Point.fromLngLat(
-                        startLng + 0.005,
-                        startLat + 0.004
-                )
-        );
-
-        points.add(
-                Point.fromLngLat(
-                        endLng - 0.002,
-                        endLat
-                )
-        );
-
-        points.add(
-                destinationLocation
-        );
-
-        drawRoute(points);
-
-        moveCameraToRoute(points);
+        displayRoute(currentRouteResponse == null ? null : currentRouteResponse.safest,
+                "🛡 Wybrano trasę bezpieczną", "🛡 Poziom bezpieczeństwa: Wysoki");
     }
 
     // =========================================================
@@ -1829,55 +2083,8 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private void drawFastRoute() {
-
-        if (currentLocation == null
-                || destinationLocation == null) {
-            return;
-        }
-
-        double startLng =
-                currentLocation.longitude();
-
-        double startLat =
-                currentLocation.latitude();
-
-        double endLng =
-                destinationLocation.longitude();
-
-        double endLat =
-                destinationLocation.latitude();
-
-        List<Point> points =
-                new ArrayList<>();
-
-        points.add(
-                Point.fromLngLat(
-                        startLng,
-                        startLat
-                )
-        );
-
-        points.add(
-                Point.fromLngLat(
-                        startLng + 0.004,
-                        startLat
-                )
-        );
-
-        points.add(
-                Point.fromLngLat(
-                        endLng - 0.003,
-                        endLat - 0.002
-                )
-        );
-
-        points.add(
-                destinationLocation
-        );
-
-        drawRoute(points);
-
-        moveCameraToRoute(points);
+        displayRoute(currentRouteResponse == null ? null : currentRouteResponse.fastest,
+                "⚡ Wybrano trasę szybką", "🛡 Poziom bezpieczeństwa: Średni");
     }
 
     // =========================================================
@@ -1885,55 +2092,388 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private void drawBalancedRoute() {
+        RouteResponse.RouteOption balanced = null;
+        if (currentRouteResponse != null
+                && currentRouteResponse.alternatives != null
+                && !currentRouteResponse.alternatives.isEmpty()) {
+            balanced = currentRouteResponse.alternatives.get(0);
+        }
+        if (balanced == null && currentRouteResponse != null) {
+            balanced = currentRouteResponse.safest;
+        }
+        displayRoute(balanced, "⚖ Wybrano trasę zbalansowaną",
+                "🛡 Poziom bezpieczeństwa: Dobry");
+    }
 
-        if (currentLocation == null
-                || destinationLocation == null) {
+    private void geocodeAndCreateRoute(String destination) {
+        if (geocoderExecutor == null || currentLocation == null) {
+            Toast.makeText(requireContext(),
+                    "Nie można teraz wyszukać trasy.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int searchGeneration = ++routeSearchGeneration;
+        if (routeCall != null) {
+            routeCall.cancel();
+        }
+        currentRouteResponse = null;
+        selectedRoute = null;
+        selectedRouteName = null;
+        startNavigationButton.setVisibility(View.GONE);
+        destinationLocation = null;
+        routeDetails.setText("Wyszukiwanie miejsca…");
+        safetyStatus.setText("");
+
+        Point start = currentLocation;
+        Context context = requireContext().getApplicationContext();
+        geocoderExecutor.execute(() -> {
+            if (!Geocoder.isPresent()) {
+                mainHandler.post(() -> {
+                    if (isAdded() && searchGeneration == routeSearchGeneration) {
+                        routeDetails.setText("Wyszukiwanie miejsc niedostępne.");
+                        Toast.makeText(requireContext(),
+                                "Na tym urządzeniu geokodowanie jest niedostępne.",
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
+                return;
+            }
+            Geocoder geocoder = new Geocoder(context, Locale.getDefault());
+            List<Address> addresses;
+            try {
+                addresses = geocoder.getFromLocationName(destination, 1);
+            } catch (IOException exception) {
+                mainHandler.post(() -> {
+                    if (isAdded() && searchGeneration == routeSearchGeneration) {
+                        routeDetails.setText("Nie udało się wyszukać miejsca.");
+                        Toast.makeText(requireContext(),
+                                "Błąd geokodowania: " + exception.getMessage(),
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
+                return;
+            }
+
+            if (addresses == null || addresses.isEmpty()
+                    || !addresses.get(0).hasLatitude()
+                    || !addresses.get(0).hasLongitude()) {
+                mainHandler.post(() -> {
+                    if (isAdded() && searchGeneration == routeSearchGeneration) {
+                        routeDetails.setText("Nie znaleziono tego miejsca.");
+                        Toast.makeText(requireContext(),
+                                "Nie znaleziono miejsca docelowego.",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
+                return;
+            }
+
+            Address address = addresses.get(0);
+            Point end = Point.fromLngLat(address.getLongitude(), address.getLatitude());
+            mainHandler.post(() -> {
+                if (isAdded() && searchGeneration == routeSearchGeneration) {
+                    destinationLocation = end;
+                    requestRoute(start, end, searchGeneration);
+                }
+            });
+        });
+    }
+
+    private void requestRoute(Point start, Point end, int searchGeneration) {
+        routeDetails.setText("Wyznaczanie trasy… może potrwać do 90 sekund.");
+        routeCall = RetrofitClient.getApiService().createRoute(
+                new RouteRequest(start.latitude(), start.longitude(),
+                        end.latitude(), end.longitude()));
+        routeCall.enqueue(new Callback<RouteResponse>() {
+            @Override
+            public void onResponse(Call<RouteResponse> call,
+                                   Response<RouteResponse> response) {
+                if (!isAdded() || call.isCanceled()
+                        || searchGeneration != routeSearchGeneration) {
+                    return;
+                }
+                if (!response.isSuccessful() || response.body() == null) {
+                    routeDetails.setText("Nie udało się wyznaczyć trasy.");
+                    Toast.makeText(requireContext(),
+                            "Błąd API trasy: " + response.code(),
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
+                currentRouteResponse = response.body();
+                if (currentRouteResponse.safest == null) {
+                    routeDetails.setText("Backend nie zwrócił bezpiecznej trasy.");
+                    return;
+                }
+                drawSafeRoute();
+            }
+
+            @Override
+            public void onFailure(Call<RouteResponse> call, Throwable throwable) {
+                if (!isAdded() || call.isCanceled()
+                        || searchGeneration != routeSearchGeneration) {
+                    return;
+                }
+                if (throwable instanceof SocketTimeoutException) {
+                    routeDetails.setText("Backend nie wyznaczył trasy w ciągu 90 sekund.");
+                    Toast.makeText(requireContext(),
+                            "Wyznaczanie trasy trwało zbyt długo. Spróbuj ponownie.",
+                            Toast.LENGTH_LONG).show();
+                } else {
+                    routeDetails.setText("Nie udało się połączyć z backendem.");
+                    Toast.makeText(requireContext(),
+                            "Błąd połączenia z API trasy: " + throwable.getMessage(),
+                            Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+    }
+
+    private void displayRoute(RouteResponse.RouteOption route,
+                             String selectedRouteText, String safetyText) {
+        if (route == null || route.geometry == null || route.geometry.coordinates == null) {
+            if (isAdded()) {
+                Toast.makeText(requireContext(),
+                        "Backend nie zwrócił wybranej trasy.",
+                        Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
+        List<Point> points = new ArrayList<>();
+        for (List<Double> coordinate : route.geometry.coordinates) {
+            if (coordinate != null && coordinate.size() >= 2
+                    && coordinate.get(0) != null && coordinate.get(1) != null) {
+                points.add(Point.fromLngLat(coordinate.get(0), coordinate.get(1)));
+            }
+        }
+        if (points.size() < 2) {
+            routeDetails.setText("Backend zwrócił nieprawidłową geometrię trasy.");
+            return;
+        }
+        selectedRoute = route;
+        selectedRouteName = selectedRouteText;
+        startNavigationButton.setVisibility(View.VISIBLE);
+        drawRoute(points);
+        moveCameraToRoute(points);
+        routeDetails.setText(String.format(Locale.getDefault(),
+                "%s • %.1f km • %d min • bezpieczeństwo %.0f%%",
+                selectedRouteText, route.distance_m / 1000.0,
+                Math.round(route.duration_s / 60.0), route.safety_score));
+        safetyStatus.setText(String.format(Locale.getDefault(),
+                "%s • bezpieczeństwo %.0f%%",
+                safetyText, route.safety_score));
+        if (navigationRouteSummary != null) {
+            navigationRouteSummary.setText(String.format(Locale.getDefault(),
+                    "%s • %.1f km • %d min",
+                    selectedRouteText, route.distance_m / 1000.0,
+                    Math.round(route.duration_s / 60.0)));
+        }
+    }
+
+    private void startNavigationForSelectedRoute() {
+        if (currentLocation == null) {
+            Toast.makeText(requireContext(),
+                    "Czekam na Twoją lokalizację GPS.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (selectedRoute == null || selectedRoute.geometry == null
+                || selectedRoute.geometry.coordinates == null) {
+            Toast.makeText(requireContext(),
+                    "Najpierw wyznacz trasę.",
+                    Toast.LENGTH_SHORT).show();
             return;
         }
 
-        double startLng =
-                currentLocation.longitude();
+        List<Point> routePoints = new ArrayList<>();
+        for (List<Double> coordinate : selectedRoute.geometry.coordinates) {
+            if (coordinate != null && coordinate.size() >= 2
+                    && coordinate.get(0) != null && coordinate.get(1) != null) {
+                routePoints.add(Point.fromLngLat(coordinate.get(0), coordinate.get(1)));
+            }
+        }
+        if (routePoints.size() < 2) {
+            Toast.makeText(requireContext(),
+                    "Wybrana trasa nie zawiera poprawnej geometrii.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-        double startLat =
-                currentLocation.latitude();
+        List<NavigationStep> steps = buildNavigationSteps(selectedRoute, routePoints);
+        if (steps.isEmpty()) {
+            Toast.makeText(requireContext(),
+                    "Nie udało się przygotować wskazówek dla tej trasy.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-        double endLng =
-                destinationLocation.longitude();
-
-        double endLat =
-                destinationLocation.latitude();
-
-        List<Point> points =
-                new ArrayList<>();
-
-        points.add(
-                Point.fromLngLat(
-                        startLng,
-                        startLat
-                )
+        currentNavigationStepIndex = 0;
+        isNavigating = true;
+        navigationVibrationTriggered = false;
+        showNavigationSteps(steps);
+        startNavigationButton.setVisibility(View.GONE);
+        routeInfoPanel.setVisibility(View.GONE);
+        routeOptionsPanel.setVisibility(View.GONE);
+        updateNavigationSummary(
+                selectedRouteName == null ? "Trasa" : selectedRouteName,
+                selectedRoute.distance_m / 1000.0,
+                (int) Math.round(selectedRoute.duration_s / 60.0)
         );
 
-        points.add(
-                Point.fromLngLat(
-                        startLng + 0.0025,
-                        startLat + 0.001
-                )
+        if (anomalyDetector != null) {
+            anomalyDetector.setNavigationActive(true);
+        }
+        if (locationComponent != null) {
+            locationComponent.updateSettings(settings -> {
+                settings.setEnabled(true);
+                settings.setPulsingEnabled(false);
+                return null;
+            });
+        }
+
+        Point bearingTarget = steps.get(0).maneuverPoint;
+        if (bearingTarget == null
+                || distanceBetweenPoints(currentLocation, bearingTarget) < 2.0) {
+            bearingTarget = routePoints.get(1);
+        }
+        mapView.getMapboxMap().setCamera(
+                new CameraOptions.Builder()
+                        .center(currentLocation)
+                        .zoom(18.0)
+                        .pitch(60.0)
+                        .bearing(calculateBearing(currentLocation, bearingTarget))
+                        .build()
         );
+        updateNavigationProgress(currentLocation);
+    }
 
-        points.add(
-                Point.fromLngLat(
-                        endLng - 0.002,
-                        endLat - 0.001
-                )
-        );
+    private List<NavigationStep> buildNavigationSteps(
+            RouteResponse.RouteOption route,
+            List<Point> points
+    ) {
+        List<NavigationStep> apiSteps = buildApiNavigationSteps(route);
+        if (!apiSteps.isEmpty()) {
+            return apiSteps;
+        }
+        return buildGeometryNavigationSteps(points);
+    }
 
-        points.add(
-                destinationLocation
-        );
+    private List<NavigationStep> buildApiNavigationSteps(
+            RouteResponse.RouteOption route
+    ) {
+        List<NavigationStep> steps = new ArrayList<>();
+        if (route == null || route.navigation_steps == null) {
+            return steps;
+        }
+        for (RouteResponse.NavigationStep step : route.navigation_steps) {
+            if (step == null || step.instruction == null
+                    || step.instruction.trim().isEmpty()
+                    || step.location == null
+                    || !Double.isFinite(step.location.lat)
+                    || !Double.isFinite(step.location.lon)
+                    || step.location.lat < -90.0 || step.location.lat > 90.0
+                    || step.location.lon < -180.0 || step.location.lon > 180.0) {
+                continue;
+            }
+            steps.add(new NavigationStep(
+                    step.instruction,
+                    (int) Math.round(Math.max(0.0, step.distance_m)),
+                    normalizeManeuver(step.maneuver),
+                    Point.fromLngLat(step.location.lon, step.location.lat)
+            ));
+        }
+        return steps;
+    }
 
-        drawRoute(points);
+    private String normalizeManeuver(String maneuver) {
+        if (maneuver == null) {
+            return "straight";
+        }
+        switch (maneuver.toLowerCase(Locale.ROOT)) {
+            case "left":
+                return "left";
+            case "right":
+                return "right";
+            case "uturn":
+                return "uturn";
+            case "roundabout":
+                return "roundabout";
+            case "finish":
+            case "arrive":
+                return "finish";
+            default:
+                return "straight";
+        }
+    }
 
-        moveCameraToRoute(points);
+    private List<NavigationStep> buildGeometryNavigationSteps(List<Point> points) {
+        List<NavigationStep> steps = new ArrayList<>();
+        if (points == null || points.size() < 2) {
+            return steps;
+        }
+
+        double distanceSincePreviousStep = 0.0;
+        double totalDistance = 0.0;
+        double previousStepDistance = 0.0;
+
+        for (int i = 1; i < points.size(); i++) {
+            double segmentDistance = distanceBetweenPoints(points.get(i - 1), points.get(i));
+            totalDistance += segmentDistance;
+            distanceSincePreviousStep += segmentDistance;
+
+            if (i >= points.size() - 1) {
+                continue;
+            }
+
+            double incomingBearing = calculateBearing(points.get(i - 1), points.get(i));
+            double outgoingBearing = calculateBearing(points.get(i), points.get(i + 1));
+            double turn = normalizeTurn(outgoingBearing - incomingBearing);
+            double absoluteTurn = Math.abs(turn);
+
+            if (absoluteTurn < 35.0) {
+                continue;
+            }
+
+            String maneuver;
+            String instruction;
+            if (absoluteTurn >= 150.0) {
+                maneuver = "uturn";
+                instruction = "Zawróć";
+            } else if (turn > 0.0) {
+                maneuver = "right";
+                instruction = "Skręć w prawo";
+            } else {
+                maneuver = "left";
+                instruction = "Skręć w lewo";
+            }
+
+            steps.add(new NavigationStep(
+                    instruction,
+                    (int) Math.round(distanceSincePreviousStep),
+                    maneuver,
+                    points.get(i)
+            ));
+            previousStepDistance = totalDistance;
+            distanceSincePreviousStep = 0.0;
+        }
+
+        Point destination = points.get(points.size() - 1);
+        steps.add(new NavigationStep(
+                "Dojdź do celu",
+                (int) Math.round(Math.max(0.0, totalDistance - previousStepDistance)),
+                "finish",
+                destination
+        ));
+        return steps;
+    }
+
+    private double normalizeTurn(double degrees) {
+        while (degrees > 180.0) {
+            degrees -= 360.0;
+        }
+        while (degrees < -180.0) {
+            degrees += 360.0;
+        }
+        return degrees;
     }
 
     // =========================================================
@@ -2275,6 +2815,8 @@ public class MapaFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        routeSearchGeneration++;
+        mainHandler.removeCallbacks(reportExpiryCleanup);
 
         if (locationComponent != null
                 && locationListenerAdded) {
@@ -2304,6 +2846,15 @@ public class MapaFragment extends Fragment {
 
         if (mapView != null) {
             mapView.onDestroy();
+        }
+
+        if (routeCall != null) {
+            routeCall.cancel();
+            routeCall = null;
+        }
+        if (geocoderExecutor != null) {
+            geocoderExecutor.shutdownNow();
+            geocoderExecutor = null;
         }
 
         locationComponent = null;
@@ -2514,6 +3065,11 @@ public class MapaFragment extends Fragment {
         isNavigating = false;
         
         navigationStepsPanel.setVisibility(View.GONE);
+        routeInfoPanel.setVisibility(View.VISIBLE);
+        routeOptionsPanel.setVisibility(View.VISIBLE);
+        if (selectedRoute != null) {
+            startNavigationButton.setVisibility(View.VISIBLE);
+        }
         
         if (anomalyDetector != null) {
             anomalyDetector.setNavigationActive(false);
@@ -3135,7 +3691,7 @@ public class MapaFragment extends Fragment {
         return bitmap;
     }
 
-    private void updateCameraMarkers() {
+    private void updateCameraMarkers(List<Camera> cameras) {
 
         if (mapView == null) {
             return;
@@ -3182,83 +3738,20 @@ public class MapaFragment extends Fragment {
             return;
         }
 
-        // ============================================
-        // TAURON ARENA KRAKÓW
-        //
-        // 50.0670, 19.9934
-        // ============================================
+        for (Camera camera : cameras) {
+            PointAnnotationOptions options =
+                    new PointAnnotationOptions()
+                            .withPoint(
+                                    Point.fromLngLat(
+                                            camera.getLongitude(),
+                                            camera.getLatitude()
+                                    )
+                            )
+                            .withIconImage(cameraBitmap)
+                            .withIconSize(1.0);
 
-        double arenaLat = 50.0670;
-        double arenaLon = 19.9934;
-
-        // ============================================
-        // KAMERA 1
-        // ============================================
-
-        PointAnnotationOptions camera1 =
-                new PointAnnotationOptions()
-                        .withPoint(
-                                Point.fromLngLat(
-                                        arenaLon + 0.0010,
-                                        arenaLat + 0.0010
-                                )
-                        )
-                        .withIconImage(cameraBitmap)
-                        .withIconSize(1.0);
-
-        // ============================================
-        // KAMERA 2
-        // ============================================
-
-        PointAnnotationOptions camera2 =
-                new PointAnnotationOptions()
-                        .withPoint(
-                                Point.fromLngLat(
-                                        arenaLon - 0.0010,
-                                        arenaLat + 0.0010
-                                )
-                        )
-                        .withIconImage(cameraBitmap)
-                        .withIconSize(1.0);
-
-        // ============================================
-        // KAMERA 3
-        // ============================================
-
-        PointAnnotationOptions camera3 =
-                new PointAnnotationOptions()
-                        .withPoint(
-                                Point.fromLngLat(
-                                        arenaLon + 0.0010,
-                                        arenaLat - 0.0010
-                                )
-                        )
-                        .withIconImage(cameraBitmap)
-                        .withIconSize(1.0);
-
-        // ============================================
-        // KAMERA 4
-        // ============================================
-
-        PointAnnotationOptions camera4 =
-                new PointAnnotationOptions()
-                        .withPoint(
-                                Point.fromLngLat(
-                                        arenaLon - 0.0010,
-                                        arenaLat - 0.0010
-                                )
-                        )
-                        .withIconImage(cameraBitmap)
-                        .withIconSize(1.0);
-
-        // ============================================
-        // DODAJ KAMERY
-        // ============================================
-
-        cameraAnnotationManager.create(camera1);
-        cameraAnnotationManager.create(camera2);
-        cameraAnnotationManager.create(camera3);
-        cameraAnnotationManager.create(camera4);
+            cameraAnnotationManager.create(options);
+        }
 
         // ============================================
         // WIDOCZNOŚĆ
@@ -3275,6 +3768,127 @@ public class MapaFragment extends Fragment {
 
         cameraAnnotationManager.setIconOpacity(
                 camerasLayerEnabled ? 1.0 : 0.0
+        );
+    }
+
+    private void updateCrimeEventMarkers(List<CrimeEvent> events) {
+
+        if (mapView == null) {
+            return;
+        }
+
+        AnnotationPlugin annotationPlugin =
+                mapView.getPlugin(
+                        Plugin.MAPBOX_ANNOTATION_PLUGIN_ID
+                );
+
+        if (annotationPlugin == null) {
+            return;
+        }
+
+        if (crimeEventAnnotationManager == null) {
+            crimeEventAnnotationManager =
+                    (PointAnnotationManager)
+                            annotationPlugin.createAnnotationManager(
+                                    AnnotationType.PointAnnotation,
+                                    new AnnotationConfig()
+                            );
+        } else {
+            crimeEventAnnotationManager.deleteAll();
+        }
+
+        crimeEventMap.clear();
+
+        Bitmap warningBitmap = getHistoricalThreatBitmap();
+
+        if (warningBitmap == null) {
+            return;
+        }
+
+        for (CrimeEvent event : events) {
+            PointAnnotationOptions options =
+                    new PointAnnotationOptions()
+                            .withPoint(
+                                    Point.fromLngLat(
+                                            event.getLongitude(),
+                                            event.getLatitude()
+                                    )
+                            )
+                            .withIconImage(warningBitmap)
+                            .withIconSize(0.7);
+
+            PointAnnotation annotation =
+                    crimeEventAnnotationManager.create(options);
+
+            crimeEventMap.put(annotation.getId(), event);
+        }
+
+        crimeEventAnnotationManager.addClickListener(
+                annotation -> {
+                    CrimeEvent event =
+                            crimeEventMap.get(annotation.getId());
+
+                    if (event != null) {
+                        showCrimeEventInfo(event);
+                    }
+
+                    return true;
+                }
+        );
+
+        updateCrimeEventLayerVisibility();
+    }
+
+    private void showCrimeEventInfo(CrimeEvent event) {
+
+        if (safePointInfoPanel != null) {
+            safePointInfoPanel.setVisibility(View.GONE);
+        }
+
+        if (reportInfoPanel != null) {
+            reportInfoPanel.setVisibility(View.GONE);
+        }
+
+        historicalThreatInfoCategory.setText(
+                "Kategoria: " + event.getCategory()
+        );
+        historicalThreatInfoDate.setText(
+                "Data: " + event.getOccurred_at()
+        );
+
+        Double severity = event.getSeverity();
+        String severityText = severity == null
+                ? "Brak danych"
+                : severity < 0.33
+                        ? "Niskie"
+                        : severity < 0.66
+                                ? "Średnie"
+                                : "Wysokie";
+
+        historicalThreatInfoSeverity.setText(
+                "⚠️ Poziom zagrożenia: " + severityText
+        );
+        historicalThreatInfoScore.setText(
+                "Źródło: " + event.getSource()
+                        + "\nOdległość: "
+                        + String.format(
+                        Locale.US,
+                        "%.0f m",
+                        event.getDistance_m()
+                )
+        );
+
+        historicalThreatInfoPanel.setVisibility(View.VISIBLE);
+    }
+
+    private void updateCrimeEventLayerVisibility() {
+
+        if (crimeEventAnnotationManager == null) {
+            return;
+        }
+
+        crimeEventAnnotationManager.setIconOpacity(
+                historicalThreatsLayerEnabled ? 1.0 : 0.0
         );
     }
 
@@ -3469,7 +4083,7 @@ public class MapaFragment extends Fragment {
         return bitmap;
     }
 
-    private void updateSafePointMarkers() {
+    private void updateSafePointMarkers(List<SafePlace> places) {
 
         if (mapView == null) {
             return;
@@ -3498,24 +4112,21 @@ public class MapaFragment extends Fragment {
             safePointAnnotationManager.deleteAll();
         }
 
-        safePointMap.clear();
+        apiSafePlaceMap.clear();
 
-        List<SafePoint> points =
-                getExampleSafePoints();
-
-        for (SafePoint safePoint : points) {
+        for (SafePlace safePlace : places) {
 
             Bitmap bitmap =
                     getSafePointBitmap(
-                            safePoint.category
+                            safePlace.getCategory()
                     );
 
             PointAnnotationOptions options =
                     new PointAnnotationOptions()
                             .withPoint(
                                     Point.fromLngLat(
-                                            safePoint.longitude,
-                                            safePoint.latitude
+                                            safePlace.getLongitude(),
+                                            safePlace.getLatitude()
                                     )
                             )
                             .withIconImage(bitmap)
@@ -3526,23 +4137,23 @@ public class MapaFragment extends Fragment {
                             options
                     );
 
-            safePointMap.put(
+            apiSafePlaceMap.put(
                     annotation.getId(),
-                    safePoint
+                    safePlace
             );
         }
 
         safePointAnnotationManager.addClickListener(
                 annotation -> {
 
-                    SafePoint point =
-                            safePointMap.get(
+                    SafePlace place =
+                            apiSafePlaceMap.get(
                                     annotation.getId()
                             );
 
-                    if (point != null) {
+                    if (place != null) {
 
-                        showSafePointInfo(point);
+                        showSafePlaceInfo(place);
                     }
 
                     return true;
@@ -3550,6 +4161,34 @@ public class MapaFragment extends Fragment {
         );
 
         updateSafePointLayerVisibility();
+    }
+
+    private void showSafePlaceInfo(SafePlace place) {
+
+        if (safePointInfoPanel == null) {
+            return;
+        }
+
+        String category = place.getCategory();
+        String name = place.getName();
+
+        safePointInfoTitle.setText(
+                getSafePointEmoji(category) + " " + name
+        );
+        safePointInfoName.setText("Nazwa: " + name);
+        safePointInfoCategory.setText(
+                "Kategoria: " + getSafePointCategoryName(category)
+        );
+        safePointInfoHours.setText(
+                "Odległość: "
+                        + String.format(Locale.US, "%.0f m", place.getDistance_m())
+        );
+        safePointInfo247.setText(
+                place.isIs_24_7()
+                        ? "🕐 Czynne 24/7"
+                        : "🕐 Godziny ograniczone"
+        );
+        safePointInfoPanel.setVisibility(View.VISIBLE);
     }
 
     private void showSafePointInfo(SafePoint point) {
@@ -3890,13 +4529,13 @@ public class MapaFragment extends Fragment {
 
     private void updateHistoricalThreatLayerVisibility() {
 
-        if (historicalThreatAnnotationManager == null) {
-            return;
+        if (historicalThreatAnnotationManager != null) {
+            historicalThreatAnnotationManager.setIconOpacity(
+                    historicalThreatsLayerEnabled ? 1.0 : 0.0
+            );
         }
 
-        historicalThreatAnnotationManager.setIconOpacity(
-                historicalThreatsLayerEnabled ? 1.0 : 0.0
-        );
+        updateCrimeEventLayerVisibility();
     }
     private void updateSafePointLayerVisibility() {
 
