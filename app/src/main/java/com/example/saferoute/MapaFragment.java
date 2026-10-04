@@ -2,6 +2,7 @@ package com.example.saferoute;
 
 import android.Manifest;
 import android.app.AlertDialog;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.graphics.Paint;
 import android.graphics.Typeface;
@@ -26,6 +27,10 @@ import androidx.annotation.Nullable;
 import androidx.core.app.ActivityCompat;
 import androidx.fragment.app.Fragment;
 import android.location.Location;
+import android.location.Address;
+import android.location.Geocoder;
+import android.os.Handler;
+import android.os.Looper;
 
 import com.mapbox.bindgen.Expected;
 import com.mapbox.bindgen.Value;
@@ -75,8 +80,15 @@ import android.graphics.drawable.Drawable;
 import com.example.saferoute.api.ApiService;
 import com.example.saferoute.api.RetrofitClient;
 import com.example.saferoute.api.SafePlace;
+import com.example.saferoute.api.RouteRequest;
+import com.example.saferoute.api.RouteResponse;
 
+import java.io.IOException;
+import java.net.SocketTimeoutException;
 import java.util.List;
+import java.util.Locale;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 
 import retrofit2.Call;
 import retrofit2.Callback;
@@ -135,6 +147,9 @@ public class MapaFragment extends Fragment {
     private Button safeRouteButton;
     private Button fastRouteButton;
     private Button balancedRouteButton;
+    private Button startNavigationButton;
+    private View routeInfoPanel;
+    private View routeOptionsPanel;
 
     // =========================================================
     // ZGŁOSZENIE
@@ -213,6 +228,14 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private Point destinationLocation;
+
+    private RouteResponse currentRouteResponse;
+    private RouteResponse.RouteOption selectedRoute;
+    private String selectedRouteName;
+    private ExecutorService geocoderExecutor;
+    private Call<RouteResponse> routeCall;
+    private final Handler mainHandler = new Handler(Looper.getMainLooper());
+    private int routeSearchGeneration = 0;
 
     // =========================================================
     // TRASA
@@ -422,8 +445,8 @@ public class MapaFragment extends Fragment {
         ApiService apiService = RetrofitClient.getApiService();
 
         Call<List<SafePlace>> call = apiService.getNearbySafePlaces(
-                point.longitude(),
                 point.latitude(),
+                point.longitude(),
                 1000
         );
 
@@ -606,6 +629,7 @@ public class MapaFragment extends Fragment {
                         false
                 );
 
+        geocoderExecutor = Executors.newSingleThreadExecutor();
         anomalyDetector = new AnomalyDetector(requireContext());
 
         // =====================================================
@@ -827,6 +851,12 @@ public class MapaFragment extends Fragment {
                 view.findViewById(
                         R.id.balanced_route_button
                 );
+
+        startNavigationButton =
+                view.findViewById(R.id.start_navigation_button);
+        startNavigationButton.setOnClickListener(v -> startNavigationForSelectedRoute());
+        routeInfoPanel = view.findViewById(R.id.route_info_panel);
+        routeOptionsPanel = view.findViewById(R.id.route_options_panel);
 
         // =====================================================
         // INFORMACJE O TRASIE
@@ -1093,38 +1123,10 @@ public class MapaFragment extends Fragment {
                 return;
             }
 
-            double startLng =
-                    currentLocation.longitude();
-
-            double startLat =
-                    currentLocation.latitude();
-
-            destinationLocation =
-                    Point.fromLngLat(
-                            startLng + 0.01,
-                            startLat + 0.005
-                    );
-
             destinationPoint.setText(
                     "🏁 Cel: " + destination
             );
-
-            routeDetails.setText(
-                    "Wyznaczono testową trasę."
-            );
-
-            safetyStatus.setText(
-                    "🛡 Wybierz rodzaj trasy."
-            );
-
-            drawSafeRoute();
-            showDemoNavigationSteps();
-
-            Toast.makeText(
-                    requireContext(),
-                    "Narysowano testową trasę.",
-                    Toast.LENGTH_SHORT
-            ).show();
+            geocodeAndCreateRoute(destination);
         });
 
         // =====================================================
@@ -1199,14 +1201,6 @@ public class MapaFragment extends Fragment {
             }
 
             drawSafeRoute();
-
-            routeDetails.setText(
-                    "🛡 Wybrano trasę bezpieczną"
-            );
-
-            safetyStatus.setText(
-                    "🛡 Poziom bezpieczeństwa: Wysoki"
-            );
         });
 
         // =====================================================
@@ -1228,14 +1222,6 @@ public class MapaFragment extends Fragment {
             }
 
             drawFastRoute();
-
-            routeDetails.setText(
-                    "⚡ Wybrano trasę szybką"
-            );
-
-            safetyStatus.setText(
-                    "🛡 Poziom bezpieczeństwa: Średni"
-            );
         });
 
         // =====================================================
@@ -1257,14 +1243,6 @@ public class MapaFragment extends Fragment {
             }
 
             drawBalancedRoute();
-
-            routeDetails.setText(
-                    "⚖ Wybrano trasę zbalansowaną"
-            );
-
-            safetyStatus.setText(
-                    "🛡 Poziom bezpieczeństwa: Dobry"
-            );
         });
 
         setupLayerButton(
@@ -1817,62 +1795,8 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private void drawSafeRoute() {
-
-        if (currentLocation == null
-                || destinationLocation == null) {
-            return;
-        }
-
-        double startLng =
-                currentLocation.longitude();
-
-        double startLat =
-                currentLocation.latitude();
-
-        double endLng =
-                destinationLocation.longitude();
-
-        double endLat =
-                destinationLocation.latitude();
-
-        List<Point> points =
-                new ArrayList<>();
-
-        points.add(
-                Point.fromLngLat(
-                        startLng,
-                        startLat
-                )
-        );
-
-        points.add(
-                Point.fromLngLat(
-                        startLng + 0.002,
-                        startLat + 0.002
-                )
-        );
-
-        points.add(
-                Point.fromLngLat(
-                        startLng + 0.005,
-                        startLat + 0.004
-                )
-        );
-
-        points.add(
-                Point.fromLngLat(
-                        endLng - 0.002,
-                        endLat
-                )
-        );
-
-        points.add(
-                destinationLocation
-        );
-
-        drawRoute(points);
-
-        moveCameraToRoute(points);
+        displayRoute(currentRouteResponse == null ? null : currentRouteResponse.safest,
+                "🛡 Wybrano trasę bezpieczną", "🛡 Poziom bezpieczeństwa: Wysoki");
     }
 
     // =========================================================
@@ -1880,55 +1804,8 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private void drawFastRoute() {
-
-        if (currentLocation == null
-                || destinationLocation == null) {
-            return;
-        }
-
-        double startLng =
-                currentLocation.longitude();
-
-        double startLat =
-                currentLocation.latitude();
-
-        double endLng =
-                destinationLocation.longitude();
-
-        double endLat =
-                destinationLocation.latitude();
-
-        List<Point> points =
-                new ArrayList<>();
-
-        points.add(
-                Point.fromLngLat(
-                        startLng,
-                        startLat
-                )
-        );
-
-        points.add(
-                Point.fromLngLat(
-                        startLng + 0.004,
-                        startLat
-                )
-        );
-
-        points.add(
-                Point.fromLngLat(
-                        endLng - 0.003,
-                        endLat - 0.002
-                )
-        );
-
-        points.add(
-                destinationLocation
-        );
-
-        drawRoute(points);
-
-        moveCameraToRoute(points);
+        displayRoute(currentRouteResponse == null ? null : currentRouteResponse.fastest,
+                "⚡ Wybrano trasę szybką", "🛡 Poziom bezpieczeństwa: Średni");
     }
 
     // =========================================================
@@ -1936,55 +1813,325 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private void drawBalancedRoute() {
+        RouteResponse.RouteOption balanced = null;
+        if (currentRouteResponse != null
+                && currentRouteResponse.alternatives != null
+                && !currentRouteResponse.alternatives.isEmpty()) {
+            balanced = currentRouteResponse.alternatives.get(0);
+        }
+        if (balanced == null && currentRouteResponse != null) {
+            balanced = currentRouteResponse.safest;
+        }
+        displayRoute(balanced, "⚖ Wybrano trasę zbalansowaną",
+                "🛡 Poziom bezpieczeństwa: Dobry");
+    }
 
-        if (currentLocation == null
-                || destinationLocation == null) {
+    private void geocodeAndCreateRoute(String destination) {
+        if (geocoderExecutor == null || currentLocation == null) {
+            Toast.makeText(requireContext(),
+                    "Nie można teraz wyszukać trasy.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        int searchGeneration = ++routeSearchGeneration;
+        if (routeCall != null) {
+            routeCall.cancel();
+        }
+        currentRouteResponse = null;
+        selectedRoute = null;
+        selectedRouteName = null;
+        startNavigationButton.setVisibility(View.GONE);
+        destinationLocation = null;
+        routeDetails.setText("Wyszukiwanie miejsca…");
+        safetyStatus.setText("");
+
+        Point start = currentLocation;
+        Context context = requireContext().getApplicationContext();
+        geocoderExecutor.execute(() -> {
+            if (!Geocoder.isPresent()) {
+                mainHandler.post(() -> {
+                    if (isAdded() && searchGeneration == routeSearchGeneration) {
+                        routeDetails.setText("Wyszukiwanie miejsc niedostępne.");
+                        Toast.makeText(requireContext(),
+                                "Na tym urządzeniu geokodowanie jest niedostępne.",
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
+                return;
+            }
+            Geocoder geocoder = new Geocoder(context, Locale.getDefault());
+            List<Address> addresses;
+            try {
+                addresses = geocoder.getFromLocationName(destination, 1);
+            } catch (IOException exception) {
+                mainHandler.post(() -> {
+                    if (isAdded() && searchGeneration == routeSearchGeneration) {
+                        routeDetails.setText("Nie udało się wyszukać miejsca.");
+                        Toast.makeText(requireContext(),
+                                "Błąd geokodowania: " + exception.getMessage(),
+                                Toast.LENGTH_LONG).show();
+                    }
+                });
+                return;
+            }
+
+            if (addresses == null || addresses.isEmpty()
+                    || !addresses.get(0).hasLatitude()
+                    || !addresses.get(0).hasLongitude()) {
+                mainHandler.post(() -> {
+                    if (isAdded() && searchGeneration == routeSearchGeneration) {
+                        routeDetails.setText("Nie znaleziono tego miejsca.");
+                        Toast.makeText(requireContext(),
+                                "Nie znaleziono miejsca docelowego.",
+                                Toast.LENGTH_SHORT).show();
+                    }
+                });
+                return;
+            }
+
+            Address address = addresses.get(0);
+            Point end = Point.fromLngLat(address.getLongitude(), address.getLatitude());
+            mainHandler.post(() -> {
+                if (isAdded() && searchGeneration == routeSearchGeneration) {
+                    destinationLocation = end;
+                    requestRoute(start, end, searchGeneration);
+                }
+            });
+        });
+    }
+
+    private void requestRoute(Point start, Point end, int searchGeneration) {
+        routeDetails.setText("Wyznaczanie trasy… może potrwać do 90 sekund.");
+        routeCall = RetrofitClient.getApiService().createRoute(
+                new RouteRequest(start.latitude(), start.longitude(),
+                        end.latitude(), end.longitude()));
+        routeCall.enqueue(new Callback<RouteResponse>() {
+            @Override
+            public void onResponse(Call<RouteResponse> call,
+                                   Response<RouteResponse> response) {
+                if (!isAdded() || call.isCanceled()
+                        || searchGeneration != routeSearchGeneration) {
+                    return;
+                }
+                if (!response.isSuccessful() || response.body() == null) {
+                    routeDetails.setText("Nie udało się wyznaczyć trasy.");
+                    Toast.makeText(requireContext(),
+                            "Błąd API trasy: " + response.code(),
+                            Toast.LENGTH_LONG).show();
+                    return;
+                }
+                currentRouteResponse = response.body();
+                if (currentRouteResponse.safest == null) {
+                    routeDetails.setText("Backend nie zwrócił bezpiecznej trasy.");
+                    return;
+                }
+                drawSafeRoute();
+            }
+
+            @Override
+            public void onFailure(Call<RouteResponse> call, Throwable throwable) {
+                if (!isAdded() || call.isCanceled()
+                        || searchGeneration != routeSearchGeneration) {
+                    return;
+                }
+                if (throwable instanceof SocketTimeoutException) {
+                    routeDetails.setText("Backend nie wyznaczył trasy w ciągu 90 sekund.");
+                    Toast.makeText(requireContext(),
+                            "Wyznaczanie trasy trwało zbyt długo. Spróbuj ponownie.",
+                            Toast.LENGTH_LONG).show();
+                } else {
+                    routeDetails.setText("Nie udało się połączyć z backendem.");
+                    Toast.makeText(requireContext(),
+                            "Błąd połączenia z API trasy: " + throwable.getMessage(),
+                            Toast.LENGTH_LONG).show();
+                }
+            }
+        });
+    }
+
+    private void displayRoute(RouteResponse.RouteOption route,
+                             String selectedRouteText, String safetyText) {
+        if (route == null || route.geometry == null || route.geometry.coordinates == null) {
+            if (isAdded()) {
+                Toast.makeText(requireContext(),
+                        "Backend nie zwrócił wybranej trasy.",
+                        Toast.LENGTH_SHORT).show();
+            }
+            return;
+        }
+        List<Point> points = new ArrayList<>();
+        for (List<Double> coordinate : route.geometry.coordinates) {
+            if (coordinate != null && coordinate.size() >= 2
+                    && coordinate.get(0) != null && coordinate.get(1) != null) {
+                points.add(Point.fromLngLat(coordinate.get(0), coordinate.get(1)));
+            }
+        }
+        if (points.size() < 2) {
+            routeDetails.setText("Backend zwrócił nieprawidłową geometrię trasy.");
+            return;
+        }
+        selectedRoute = route;
+        selectedRouteName = selectedRouteText;
+        startNavigationButton.setVisibility(View.VISIBLE);
+        drawRoute(points);
+        moveCameraToRoute(points);
+        routeDetails.setText(String.format(Locale.getDefault(),
+                "%s • %.1f km • %d min • bezpieczeństwo %.0f%%",
+                selectedRouteText, route.distance_m / 1000.0,
+                Math.round(route.duration_s / 60.0), route.safety_score));
+        safetyStatus.setText(String.format(Locale.getDefault(),
+                "%s • bezpieczeństwo %.0f%%",
+                safetyText, route.safety_score));
+        if (navigationRouteSummary != null) {
+            navigationRouteSummary.setText(String.format(Locale.getDefault(),
+                    "%s • %.1f km • %d min",
+                    selectedRouteText, route.distance_m / 1000.0,
+                    Math.round(route.duration_s / 60.0)));
+        }
+    }
+
+    private void startNavigationForSelectedRoute() {
+        if (currentLocation == null) {
+            Toast.makeText(requireContext(),
+                    "Czekam na Twoją lokalizację GPS.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (selectedRoute == null || selectedRoute.geometry == null
+                || selectedRoute.geometry.coordinates == null) {
+            Toast.makeText(requireContext(),
+                    "Najpierw wyznacz trasę.",
+                    Toast.LENGTH_SHORT).show();
             return;
         }
 
-        double startLng =
-                currentLocation.longitude();
+        List<Point> routePoints = new ArrayList<>();
+        for (List<Double> coordinate : selectedRoute.geometry.coordinates) {
+            if (coordinate != null && coordinate.size() >= 2
+                    && coordinate.get(0) != null && coordinate.get(1) != null) {
+                routePoints.add(Point.fromLngLat(coordinate.get(0), coordinate.get(1)));
+            }
+        }
+        if (routePoints.size() < 2) {
+            Toast.makeText(requireContext(),
+                    "Wybrana trasa nie zawiera poprawnej geometrii.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-        double startLat =
-                currentLocation.latitude();
+        List<NavigationStep> steps = buildNavigationSteps(routePoints);
+        if (steps.isEmpty()) {
+            Toast.makeText(requireContext(),
+                    "Nie udało się przygotować wskazówek dla tej trasy.",
+                    Toast.LENGTH_SHORT).show();
+            return;
+        }
 
-        double endLng =
-                destinationLocation.longitude();
-
-        double endLat =
-                destinationLocation.latitude();
-
-        List<Point> points =
-                new ArrayList<>();
-
-        points.add(
-                Point.fromLngLat(
-                        startLng,
-                        startLat
-                )
+        currentNavigationStepIndex = 0;
+        isNavigating = true;
+        navigationVibrationTriggered = false;
+        showNavigationSteps(steps);
+        startNavigationButton.setVisibility(View.GONE);
+        routeInfoPanel.setVisibility(View.GONE);
+        routeOptionsPanel.setVisibility(View.GONE);
+        updateNavigationSummary(
+                selectedRouteName == null ? "Trasa" : selectedRouteName,
+                selectedRoute.distance_m / 1000.0,
+                (int) Math.round(selectedRoute.duration_s / 60.0)
         );
 
-        points.add(
-                Point.fromLngLat(
-                        startLng + 0.0025,
-                        startLat + 0.001
-                )
+        if (anomalyDetector != null) {
+            anomalyDetector.setNavigationActive(true);
+        }
+        if (locationComponent != null) {
+            locationComponent.updateSettings(settings -> {
+                settings.setEnabled(true);
+                settings.setPulsingEnabled(false);
+                return null;
+            });
+        }
+
+        Point bearingTarget = routePoints.get(1);
+        mapView.getMapboxMap().setCamera(
+                new CameraOptions.Builder()
+                        .center(currentLocation)
+                        .zoom(18.0)
+                        .pitch(60.0)
+                        .bearing(calculateBearing(currentLocation, bearingTarget))
+                        .build()
         );
+        updateNavigationProgress(currentLocation);
+    }
 
-        points.add(
-                Point.fromLngLat(
-                        endLng - 0.002,
-                        endLat - 0.001
-                )
-        );
+    private List<NavigationStep> buildNavigationSteps(List<Point> points) {
+        List<NavigationStep> steps = new ArrayList<>();
+        if (points == null || points.size() < 2) {
+            return steps;
+        }
 
-        points.add(
-                destinationLocation
-        );
+        double distanceSincePreviousStep = 0.0;
+        double totalDistance = 0.0;
+        double previousStepDistance = 0.0;
 
-        drawRoute(points);
+        for (int i = 1; i < points.size(); i++) {
+            double segmentDistance = distanceBetweenPoints(points.get(i - 1), points.get(i));
+            totalDistance += segmentDistance;
+            distanceSincePreviousStep += segmentDistance;
 
-        moveCameraToRoute(points);
+            if (i >= points.size() - 1) {
+                continue;
+            }
+
+            double incomingBearing = calculateBearing(points.get(i - 1), points.get(i));
+            double outgoingBearing = calculateBearing(points.get(i), points.get(i + 1));
+            double turn = normalizeTurn(outgoingBearing - incomingBearing);
+            double absoluteTurn = Math.abs(turn);
+
+            if (absoluteTurn < 35.0) {
+                continue;
+            }
+
+            String maneuver;
+            String instruction;
+            if (absoluteTurn >= 150.0) {
+                maneuver = "uturn";
+                instruction = "Zawróć";
+            } else if (turn > 0.0) {
+                maneuver = "right";
+                instruction = "Skręć w prawo";
+            } else {
+                maneuver = "left";
+                instruction = "Skręć w lewo";
+            }
+
+            steps.add(new NavigationStep(
+                    instruction,
+                    (int) Math.round(distanceSincePreviousStep),
+                    maneuver,
+                    points.get(i)
+            ));
+            previousStepDistance = totalDistance;
+            distanceSincePreviousStep = 0.0;
+        }
+
+        Point destination = points.get(points.size() - 1);
+        steps.add(new NavigationStep(
+                "Dojdź do celu",
+                (int) Math.round(Math.max(0.0, totalDistance - previousStepDistance)),
+                "finish",
+                destination
+        ));
+        return steps;
+    }
+
+    private double normalizeTurn(double degrees) {
+        while (degrees > 180.0) {
+            degrees -= 360.0;
+        }
+        while (degrees < -180.0) {
+            degrees += 360.0;
+        }
+        return degrees;
     }
 
     // =========================================================
@@ -2326,6 +2473,7 @@ public class MapaFragment extends Fragment {
 
     @Override
     public void onDestroyView() {
+        routeSearchGeneration++;
 
         if (locationComponent != null
                 && locationListenerAdded) {
@@ -2355,6 +2503,15 @@ public class MapaFragment extends Fragment {
 
         if (mapView != null) {
             mapView.onDestroy();
+        }
+
+        if (routeCall != null) {
+            routeCall.cancel();
+            routeCall = null;
+        }
+        if (geocoderExecutor != null) {
+            geocoderExecutor.shutdownNow();
+            geocoderExecutor = null;
         }
 
         locationComponent = null;
@@ -2565,6 +2722,11 @@ public class MapaFragment extends Fragment {
         isNavigating = false;
         
         navigationStepsPanel.setVisibility(View.GONE);
+        routeInfoPanel.setVisibility(View.VISIBLE);
+        routeOptionsPanel.setVisibility(View.VISIBLE);
+        if (selectedRoute != null) {
+            startNavigationButton.setVisibility(View.VISIBLE);
+        }
         
         if (anomalyDetector != null) {
             anomalyDetector.setNavigationActive(false);
