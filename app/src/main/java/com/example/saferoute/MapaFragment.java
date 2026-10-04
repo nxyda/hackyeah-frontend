@@ -72,6 +72,16 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.drawable.Drawable;
 
+import com.example.saferoute.api.ApiService;
+import com.example.saferoute.api.RetrofitClient;
+import com.example.saferoute.api.SafePlace;
+
+import java.util.List;
+
+import retrofit2.Call;
+import retrofit2.Callback;
+import retrofit2.Response;
+
 import androidx.core.content.ContextCompat;
 
 public class MapaFragment extends Fragment {
@@ -268,6 +278,9 @@ public class MapaFragment extends Fragment {
     private Map<String, SafePoint> safePointMap =
             new HashMap<>();
 
+    private Map<String, SafePlace> apiSafePlaceMap =
+            new HashMap<>();
+
     private boolean camerasLayerEnabled = true;
     private PointAnnotationManager cameraAnnotationManager;
 
@@ -402,6 +415,47 @@ public class MapaFragment extends Fragment {
     }
 
     // =========================================================
+    // API SAFE PLACES
+    // =========================================================
+    private void loadNearbySafePlaces(Point point) {
+
+        ApiService apiService = RetrofitClient.getApiService();
+
+        Call<List<SafePlace>> call = apiService.getNearbySafePlaces(
+                point.longitude(),
+                point.latitude(),
+                1000
+        );
+
+        call.enqueue(new Callback<List<SafePlace>>() {
+
+            @Override
+            public void onResponse(
+                    Call<List<SafePlace>> call,
+                    Response<List<SafePlace>> response
+            ) {
+                if (response.isSuccessful() && response.body() != null) {
+
+                    List<SafePlace> places = response.body();
+
+                    updateSafePointMarkers(places);
+
+                } else {
+                    System.out.println("Błąd API: " + response.code());
+                }
+            }
+
+            @Override
+            public void onFailure(
+                    Call<List<SafePlace>> call,
+                    Throwable t
+            ) {
+                System.out.println("Błąd połączenia z API: " + t.getMessage());
+            }
+        });
+    }
+
+    // =========================================================
     // LISTENER GPS
     // =========================================================
 
@@ -427,6 +481,9 @@ public class MapaFragment extends Fragment {
                 } else if (!firstLocationReceived) {
                     // Pierwsze odpalenie aplikacji (centrowanie mapy)
                     firstLocationReceived = true;
+
+                    loadNearbySafePlaces(point);
+
                     mapView.getMapboxMap().setCamera(
                             new CameraOptions.Builder().center(point).zoom(14.0).build()
                     );
@@ -997,12 +1054,6 @@ public class MapaFragment extends Fragment {
                             // ---------------------------------
 
                             updateReportMarkers();
-
-                            updateCameraMarkers();
-
-                            updateSafePointMarkers();
-
-                            updateHistoricalThreatMarkers();
 
                             updateCityEventMarkers();
                         }
@@ -3477,7 +3528,7 @@ public class MapaFragment extends Fragment {
         return bitmap;
     }
 
-    private void updateSafePointMarkers() {
+    private void updateSafePointMarkers(List<SafePlace> places) {
 
         if (mapView == null) {
             return;
@@ -3506,24 +3557,21 @@ public class MapaFragment extends Fragment {
             safePointAnnotationManager.deleteAll();
         }
 
-        safePointMap.clear();
+        apiSafePlaceMap.clear();
 
-        List<SafePoint> points =
-                getExampleSafePoints();
-
-        for (SafePoint safePoint : points) {
+        for (SafePlace safePlace : places) {
 
             Bitmap bitmap =
                     getSafePointBitmap(
-                            safePoint.category
+                            safePlace.getCategory()
                     );
 
             PointAnnotationOptions options =
                     new PointAnnotationOptions()
                             .withPoint(
                                     Point.fromLngLat(
-                                            safePoint.longitude,
-                                            safePoint.latitude
+                                            safePlace.getLongitude(),
+                                            safePlace.getLatitude()
                                     )
                             )
                             .withIconImage(bitmap)
@@ -3534,23 +3582,23 @@ public class MapaFragment extends Fragment {
                             options
                     );
 
-            safePointMap.put(
+            apiSafePlaceMap.put(
                     annotation.getId(),
-                    safePoint
+                    safePlace
             );
         }
 
         safePointAnnotationManager.addClickListener(
                 annotation -> {
 
-                    SafePoint point =
-                            safePointMap.get(
+                    SafePlace place =
+                            apiSafePlaceMap.get(
                                     annotation.getId()
                             );
 
-                    if (point != null) {
+                    if (place != null) {
 
-                        showSafePointInfo(point);
+                        showSafePlaceInfo(place);
                     }
 
                     return true;
@@ -3558,6 +3606,34 @@ public class MapaFragment extends Fragment {
         );
 
         updateSafePointLayerVisibility();
+    }
+
+    private void showSafePlaceInfo(SafePlace place) {
+
+        if (safePointInfoPanel == null) {
+            return;
+        }
+
+        String category = place.getCategory();
+        String name = place.getName();
+
+        safePointInfoTitle.setText(
+                getSafePointEmoji(category) + " " + name
+        );
+        safePointInfoName.setText("Nazwa: " + name);
+        safePointInfoCategory.setText(
+                "Kategoria: " + getSafePointCategoryName(category)
+        );
+        safePointInfoHours.setText(
+                "Odległość: "
+                        + String.format(Locale.US, "%.0f m", place.getDistance_m())
+        );
+        safePointInfo247.setText(
+                place.isIs_24_7()
+                        ? "🕐 Czynne 24/7"
+                        : "🕐 Godziny ograniczone"
+        );
+        safePointInfoPanel.setVisibility(View.VISIBLE);
     }
 
     private void showSafePointInfo(SafePoint point) {
