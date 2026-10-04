@@ -19,7 +19,7 @@
             android:src="@android:drawable/ic_menu_share"
             android:layout_marginBottom="16dp"
             android:layout_marginTop="16dp"
-            app:tint="#4CAF50"
+            app:tint="#FF028D"
             xmlns:app="http://schemas.android.com/apk/res-auto"/>
 
         <TextView
@@ -31,7 +31,6 @@
             android:textStyle="bold"
             android:layout_marginBottom="24dp"/>
 
-        <!-- PANEL 1: NADAJNIK (Udostępnianie swojej trasy) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -77,7 +76,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
                 android:text="Generuj kod i rozpocznij"
-                android:backgroundTint="#4CAF50"
+                android:backgroundTint="#4E1C51"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold"/>
 
@@ -92,7 +91,6 @@
                 android:visibility="gone"/>
         </LinearLayout>
 
-        <!-- PANEL 2: ODBIORNIK (Śledzenie kogoś) -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -129,7 +127,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="60dp"
                 android:text="Połącz i śledź"
-                android:backgroundTint="#2196F3"
+                android:backgroundTint="#4E1C51"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold"/>
 
@@ -143,7 +141,6 @@
                 android:layout_marginTop="8dp"
                 android:visibility="gone"/>
 
-            <!-- Okienko danych na żywo (dla dema hackathonowego) -->
             <LinearLayout
                 android:id="@+id/panel_live_data"
                 android:layout_width="match_parent"
@@ -164,7 +161,6 @@
                     android:textStyle="bold"
                     android:layout_marginBottom="12dp"/>
 
-                <!-- Mini mapa dla odbiornika (Powiększona, usunięto czerwony krzyżyk) -->
                 <FrameLayout
                     android:layout_width="match_parent"
                     android:layout_height="400dp"
