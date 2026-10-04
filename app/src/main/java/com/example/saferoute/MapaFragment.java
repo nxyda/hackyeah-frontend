@@ -3,11 +3,13 @@ package com.example.saferoute;
 import android.Manifest;
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.graphics.Paint;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.view.LayoutInflater;
+import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -236,6 +238,20 @@ public class MapaFragment extends Fragment {
     private Call<RouteResponse> routeCall;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
     private int routeSearchGeneration = 0;
+    private final Runnable reportExpiryCleanup = new Runnable() {
+        @Override
+        public void run() {
+            if (!isAdded() || mapView == null) {
+                return;
+            }
+            int previousSize = reports.size();
+            reports.removeIf(MapaFragment.this::isLocallyExpired);
+            if (reports.size() != previousSize) {
+                updateReportMarkers();
+            }
+            mainHandler.postDelayed(this, 30_000L);
+        }
+    };
 
     // =========================================================
     // TRASA
@@ -279,9 +295,9 @@ public class MapaFragment extends Fragment {
 
     private static final double VIBRATION_DISTANCE_METERS = 30.0;
 
-    private int currentReportConfirmations = 4;
-
-    private boolean currentReportConfirmed = false;
+    private Report selectedReportForFeedback;
+    private static final String REPORT_PREFS = "SafeRouteReportPrefs";
+    private static final long REPORT_EXPIRY_MS = 60L * 60L * 1000L;
 
     private boolean lightingLayerEnabled = true;
 
@@ -416,13 +432,17 @@ public class MapaFragment extends Fragment {
         String category;
 
         String createdAt;
+        String expiresAt;
+        int confirmations;
 
         Report(
                 String id,
                 double latitude,
                 double longitude,
                 String category,
-                String createdAt
+                String createdAt,
+                String expiresAt,
+                int confirmations
         ) {
 
             this.id = id;
@@ -434,6 +454,8 @@ public class MapaFragment extends Fragment {
             this.category = category;
 
             this.createdAt = createdAt;
+            this.expiresAt = expiresAt;
+            this.confirmations = confirmations;
         }
     }
 
@@ -551,6 +573,7 @@ public class MapaFragment extends Fragment {
 
                                     if (expected == null
                                             || !expected.isValue()) {
+                                        showNearbyReportAt(point);
                                         return;
                                     }
 
@@ -560,6 +583,7 @@ public class MapaFragment extends Fragment {
 
                                     if (features == null
                                             || features.isEmpty()) {
+                                        showNearbyReportAt(point);
                                         return;
                                     }
 
@@ -571,6 +595,7 @@ public class MapaFragment extends Fragment {
                                             || queriedFeature
                                             .getQueriedFeature()
                                             == null) {
+                                        showNearbyReportAt(point);
                                         return;
                                     }
 
@@ -581,6 +606,7 @@ public class MapaFragment extends Fragment {
                                                     .getFeature();
 
                                     if (feature == null) {
+                                        showNearbyReportAt(point);
                                         return;
                                     }
 
@@ -589,26 +615,40 @@ public class MapaFragment extends Fragment {
                                                     "id"
                                             );
 
-                                    String category =
-                                            feature.getStringProperty(
-                                                    "category"
-                                            );
-
-                                    String createdAt =
-                                            feature.getStringProperty(
-                                                    "created_at"
-                                            );
-
-                                    showReportInfo(
-                                            reportId,
-                                            category,
-                                            createdAt
-                                    );
+                                    for (Report report : reports) {
+                                        if (report.id.equals(reportId)) {
+                                            showReportInfo(report);
+                                            return;
+                                        }
+                                    }
+                                    showNearbyReportAt(point);
                                 }
                         );
 
                 return true;
             };
+
+    private void showNearbyReportAt(Point tappedPoint) {
+        Report nearestReport = null;
+        float nearestDistance = 40f;
+        for (Report report : reports) {
+            float[] distance = new float[1];
+            Location.distanceBetween(
+                    tappedPoint.latitude(),
+                    tappedPoint.longitude(),
+                    report.latitude,
+                    report.longitude,
+                    distance
+            );
+            if (distance[0] <= nearestDistance) {
+                nearestDistance = distance[0];
+                nearestReport = report;
+            }
+        }
+        if (nearestReport != null) {
+            showReportInfo(nearestReport);
+        }
+    }
 
     // =========================================================
     // ON CREATE VIEW
@@ -993,49 +1033,15 @@ public class MapaFragment extends Fragment {
         );
 
         reportInfoConfirm.setOnClickListener(v -> {
-
-            if (!currentReportConfirmed) {
-
-                currentReportConfirmations++;
-                currentReportConfirmed = true;
-
-                reportInfoConfirmations.setText(
-                        "👥 Potwierdzone przez "
-                                + currentReportConfirmations
-                                + " osoby"
-                );
-
-                reportInfoConfirm.setText(
-                        "✓"
-                );
-
-                // BLOKADA obu przycisków
-                reportInfoConfirm.setEnabled(false);
-                reportInfoInvalid.setEnabled(false);
-
-                Toast.makeText(
-                        requireContext(),
-                        "Potwierdzono zgłoszenie.",
-                        Toast.LENGTH_SHORT
-                ).show();
+            if (selectedReportForFeedback != null) {
+                saveReportReaction(selectedReportForFeedback, "like");
             }
         });
 
         reportInfoInvalid.setOnClickListener(v -> {
-
-            // BLOKADA obu przycisków
-            reportInfoConfirm.setEnabled(false);
-            reportInfoInvalid.setEnabled(false);
-
-            reportInfoInvalid.setText(
-                    "✓"
-            );
-
-            Toast.makeText(
-                    requireContext(),
-                    "Dzięki za aktualizację zgłoszenia.",
-                    Toast.LENGTH_SHORT
-            ).show();
+            if (selectedReportForFeedback != null) {
+                saveReportReaction(selectedReportForFeedback, "dislike");
+            }
         });
 
         reportInfoPanel.setVisibility(
@@ -1339,6 +1345,8 @@ public class MapaFragment extends Fragment {
             }
         });
 
+        mainHandler.removeCallbacks(reportExpiryCleanup);
+        mainHandler.postDelayed(reportExpiryCleanup, 30_000L);
 
         return view;
     }
@@ -1348,47 +1356,172 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private void showReportCategoryDialog() {
-
         String[] categoryValues = {
-
-                "danger",
-                "harassment",
-                "poor_lighting",
-                "blocked_path",
-                "suspicious_activity",
-                "other"
+                "danger", "harassment", "poor_lighting",
+                "blocked_path", "suspicious_activity", "other"
         };
-
         String[] categoryLabels = {
-
-                "Niebezpieczeństwo",
-                "Nękanie",
-                "Słabe oświetlenie",
-                "Zablokowana droga",
-                "Podejrzana aktywność",
-                "Inne"
+                "Niebezpieczeństwo", "Nękanie", "Słabe oświetlenie",
+                "Zablokowana droga", "Podejrzana aktywność", "Inne"
         };
+        String[] categoryIcons = {"⚠️", "🛑", "💡", "🚧", "👀", "📍"};
 
-        new AlertDialog.Builder(
-                requireContext()
-        )
-                .setTitle(
-                        "Dodaj zgłoszenie"
-                )
-                .setItems(
-                        categoryLabels,
-                        (dialog, which) -> {
+        int padding = dp(20);
+        LinearLayout content = new LinearLayout(requireContext());
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(padding, padding, padding, dp(12));
+        content.setBackground(roundedBackground("#1E1E1E", dp(20)));
 
-                            addReport(
-                                    categoryValues[which]
-                            );
-                        }
-                )
-                .setNegativeButton(
-                        "Anuluj",
-                        null
-                )
-                .show();
+        TextView title = new TextView(requireContext());
+        title.setText("Dodaj zgłoszenie");
+        title.setTextColor(android.graphics.Color.WHITE);
+        title.setTextSize(21);
+        title.setTypeface(null, Typeface.BOLD);
+        content.addView(title);
+
+        TextView subtitle = new TextView(requireContext());
+        subtitle.setText("Wybierz, co dzieje się w tej okolicy");
+        subtitle.setTextColor(android.graphics.Color.parseColor("#BDBDBD"));
+        subtitle.setTextSize(14);
+        LinearLayout.LayoutParams subtitleParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+        );
+        subtitleParams.topMargin = dp(6);
+        subtitleParams.bottomMargin = dp(14);
+        content.addView(subtitle, subtitleParams);
+
+        LinearLayout categories = new LinearLayout(requireContext());
+        categories.setOrientation(LinearLayout.VERTICAL);
+        int[] selectedCategory = {0};
+        List<View> categoryRows = new ArrayList<>();
+        List<TextView> selectionMarks = new ArrayList<>();
+
+        for (int i = 0; i < categoryLabels.length; i++) {
+            final int index = i;
+            LinearLayout row = new LinearLayout(requireContext());
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(12), 0, dp(12), 0);
+            row.setMinimumHeight(dp(50));
+
+            TextView icon = new TextView(requireContext());
+            icon.setText(categoryIcons[i]);
+            icon.setTextSize(19);
+            icon.setGravity(Gravity.CENTER);
+            row.addView(icon, new LinearLayout.LayoutParams(dp(34), dp(42)));
+
+            TextView label = new TextView(requireContext());
+            label.setText(categoryLabels[i]);
+            label.setTextColor(android.graphics.Color.WHITE);
+            label.setTextSize(15);
+            LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(
+                    0,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    1
+            );
+            labelParams.leftMargin = dp(8);
+            row.addView(label, labelParams);
+
+            TextView mark = new TextView(requireContext());
+            mark.setText("✓");
+            mark.setTextColor(android.graphics.Color.parseColor("#65D98B"));
+            mark.setTextSize(17);
+            mark.setTypeface(null, Typeface.BOLD);
+            mark.setGravity(Gravity.CENTER);
+            row.addView(mark, new LinearLayout.LayoutParams(dp(28), dp(42)));
+
+            categoryRows.add(row);
+            selectionMarks.add(mark);
+            row.setOnClickListener(v -> {
+                selectedCategory[0] = index;
+                updateReportCategorySelection(categoryRows, selectionMarks, selectedCategory[0]);
+            });
+            LinearLayout.LayoutParams rowParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    dp(50)
+            );
+            if (i > 0) {
+                rowParams.topMargin = dp(5);
+            }
+            categories.addView(row, rowParams);
+        }
+        updateReportCategorySelection(categoryRows, selectionMarks, selectedCategory[0]);
+        content.addView(categories);
+
+        LinearLayout actions = new LinearLayout(requireContext());
+        actions.setGravity(Gravity.END | Gravity.CENTER_VERTICAL);
+        actions.setPadding(0, dp(12), 0, 0);
+
+        Button cancel = new Button(requireContext());
+        cancel.setText("Anuluj");
+        cancel.setTextColor(android.graphics.Color.parseColor("#BDBDBD"));
+        cancel.setAllCaps(false);
+        cancel.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+        actions.addView(cancel);
+
+        Button submit = new Button(requireContext());
+        submit.setText("Dodaj zgłoszenie");
+        submit.setTextColor(android.graphics.Color.WHITE);
+        submit.setTextSize(14);
+        submit.setTypeface(null, Typeface.BOLD);
+        submit.setAllCaps(false);
+        submit.setPadding(dp(14), 0, dp(14), 0);
+        submit.setBackground(roundedBackground("#2E9D5B", dp(12)));
+        LinearLayout.LayoutParams submitParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(46)
+        );
+        submitParams.leftMargin = dp(8);
+        actions.addView(submit, submitParams);
+        content.addView(actions);
+
+        AlertDialog dialog = new AlertDialog.Builder(requireContext()).create();
+        cancel.setOnClickListener(v -> dialog.dismiss());
+        submit.setOnClickListener(v -> {
+            dialog.dismiss();
+            addReport(categoryValues[selectedCategory[0]]);
+        });
+        dialog.setView(content);
+        dialog.show();
+        if (dialog.getWindow() != null) {
+            dialog.getWindow().setBackgroundDrawable(
+                    new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT)
+            );
+            dialog.getWindow().setLayout(
+                    Math.min(dp(380), getResources().getDisplayMetrics().widthPixels - dp(32)),
+                    ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+        }
+    }
+
+    private void updateReportCategorySelection(
+            List<View> rows,
+            List<TextView> marks,
+            int selectedIndex
+    ) {
+        for (int i = 0; i < rows.size(); i++) {
+            boolean selected = i == selectedIndex;
+            rows.get(i).setBackground(roundedBackground(
+                    selected ? "#303B34" : "#292929",
+                    dp(12)
+            ));
+            marks.get(i).setVisibility(selected ? View.VISIBLE : View.INVISIBLE);
+        }
+    }
+
+    private android.graphics.drawable.GradientDrawable roundedBackground(
+            String color,
+            int radius
+    ) {
+        android.graphics.drawable.GradientDrawable background =
+                new android.graphics.drawable.GradientDrawable();
+        background.setColor(android.graphics.Color.parseColor(color));
+        background.setCornerRadius(radius);
+        return background;
+    }
+
+    private int dp(float value) {
+        return (int) (value * getResources().getDisplayMetrics().density + 0.5f);
     }
 
     // =========================================================
@@ -1410,33 +1543,93 @@ public class MapaFragment extends Fragment {
             return;
         }
 
-        String reportId =
-                UUID.randomUUID().toString();
-
-        String createdAt =
-                new SimpleDateFormat(
-                        "yyyy-MM-dd HH:mm:ss",
-                        Locale.getDefault()
-                ).format(
-                        new Date()
-                );
-
-        Report report =
-                new Report(
-                        reportId,
-                        currentLocation.latitude(),
-                        currentLocation.longitude(),
-                        category,
-                        createdAt
-                );
-
+        SimpleDateFormat format = new SimpleDateFormat(
+                "yyyy-MM-dd'T'HH:mm:ss'Z'",
+                Locale.US
+        );
+        format.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+        Report report = new Report(
+                UUID.randomUUID().toString(),
+                currentLocation.latitude(),
+                currentLocation.longitude(),
+                category,
+                format.format(new Date()),
+                null,
+                0
+        );
         reports.add(report);
-
         updateReportMarkers();
-
         Toast.makeText(
                 requireContext(),
-                "Dodano zgłoszenie",
+                "Dodano zgłoszenie na tym urządzeniu.",
+                Toast.LENGTH_SHORT
+        ).show();
+    }
+
+    private boolean isLocallyExpired(Report report) {
+        if (report.confirmations > 0) {
+            return false;
+        }
+        long expiresAt = parseApiTime(report.expiresAt);
+        if (expiresAt > 0) {
+            return expiresAt <= System.currentTimeMillis();
+        }
+        long createdAt = parseApiTime(report.createdAt);
+        return createdAt > 0
+                && System.currentTimeMillis() - createdAt >= REPORT_EXPIRY_MS;
+    }
+
+    private long parseApiTime(String value) {
+        if (value == null || value.length() < 19) {
+            return -1;
+        }
+        try {
+            SimpleDateFormat format = new SimpleDateFormat(
+                    "yyyy-MM-dd'T'HH:mm:ss",
+                    Locale.US
+            );
+            format.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
+            return format.parse(value.substring(0, 19)).getTime();
+        } catch (java.text.ParseException exception) {
+            return -1;
+        }
+    }
+
+    private SharedPreferences reportPreferences() {
+        return requireContext().getSharedPreferences(REPORT_PREFS, Context.MODE_PRIVATE);
+    }
+
+    private String reactionKey(String reportId) {
+        return "reaction_" + reportId;
+    }
+
+    private void saveReportReaction(Report report, String reaction) {
+        if (!isAdded() || report == null) {
+            return;
+        }
+        SharedPreferences preferences = reportPreferences();
+        String key = reactionKey(report.id);
+        if (preferences.contains(key)) {
+            Toast.makeText(
+                    requireContext(),
+                    "Na to zgłoszenie można zareagować tylko raz.",
+                    Toast.LENGTH_SHORT
+            ).show();
+            return;
+        }
+        if (isLocallyExpired(report) && report.confirmations <= 0) {
+            Toast.makeText(requireContext(), "To zgłoszenie wygasło po godzinie bez potwierdzeń.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        preferences.edit().putString(key, reaction).apply();
+        if ("like".equals(reaction)) {
+            report.confirmations++;
+        }
+        showReportInfo(report);
+        updateReportMarkers();
+        Toast.makeText(
+                requireContext(),
+                "Reakcja zapisana na tym urządzeniu.",
                 Toast.LENGTH_SHORT
         ).show();
     }
@@ -1450,6 +1643,7 @@ public class MapaFragment extends Fragment {
         if (mapView == null) {
             return;
         }
+        reports.removeIf(this::isLocallyExpired);
 
         mapView.getMapboxMap().getStyle(
                 style -> {
@@ -1699,46 +1893,40 @@ public class MapaFragment extends Fragment {
     // =========================================================
 
     private void showReportInfo(
-            String id,
-            String category,
-            String createdAt
+            Report report
     ) {
 
-        if (reportInfoPanel == null) {
+        if (reportInfoPanel == null || report == null) {
             return;
         }
 
-        currentReportConfirmations = 4;
-        currentReportConfirmed = false;
+        selectedReportForFeedback = report;
 
         reportInfoCategory.setText(
-                "Kategoria: " + category
+                "Kategoria: " + report.category
         );
 
         reportInfoTime.setText(
-                "Godzina: " + createdAt
+                "Godzina: " + report.createdAt
         );
 
         reportInfoId.setText(
-                "ID: " + id
+                "ID: " + report.id
         );
 
         reportInfoConfirmations.setText(
                 "👥 Potwierdzone przez "
-                        + currentReportConfirmations
+                        + report.confirmations
                         + " osoby"
         );
 
-        reportInfoConfirm.setText(
-                "👍"
-        );
-
-        reportInfoInvalid.setText(
-                "👎"
-        );
-
-        reportInfoConfirm.setEnabled(true);
-        reportInfoInvalid.setEnabled(true);
+        String reaction = reportPreferences().getString(reactionKey(report.id), null);
+        reportInfoConfirm.setText("like".equals(reaction) ? "✓" : "👍");
+        reportInfoInvalid.setText("dislike".equals(reaction) ? "✓" : "👎");
+        boolean canReact = reaction == null
+                && !(isLocallyExpired(report) && report.confirmations <= 0);
+        reportInfoConfirm.setEnabled(canReact);
+        reportInfoInvalid.setEnabled(canReact);
 
         reportInfoPanel.setVisibility(
                 View.VISIBLE
@@ -2019,7 +2207,7 @@ public class MapaFragment extends Fragment {
             return;
         }
 
-        List<NavigationStep> steps = buildNavigationSteps(routePoints);
+        List<NavigationStep> steps = buildNavigationSteps(selectedRoute, routePoints);
         if (steps.isEmpty()) {
             Toast.makeText(requireContext(),
                     "Nie udało się przygotować wskazówek dla tej trasy.",
@@ -2051,7 +2239,11 @@ public class MapaFragment extends Fragment {
             });
         }
 
-        Point bearingTarget = routePoints.get(1);
+        Point bearingTarget = steps.get(0).maneuverPoint;
+        if (bearingTarget == null
+                || distanceBetweenPoints(currentLocation, bearingTarget) < 2.0) {
+            bearingTarget = routePoints.get(1);
+        }
         mapView.getMapboxMap().setCamera(
                 new CameraOptions.Builder()
                         .center(currentLocation)
@@ -2063,7 +2255,66 @@ public class MapaFragment extends Fragment {
         updateNavigationProgress(currentLocation);
     }
 
-    private List<NavigationStep> buildNavigationSteps(List<Point> points) {
+    private List<NavigationStep> buildNavigationSteps(
+            RouteResponse.RouteOption route,
+            List<Point> points
+    ) {
+        List<NavigationStep> apiSteps = buildApiNavigationSteps(route);
+        if (!apiSteps.isEmpty()) {
+            return apiSteps;
+        }
+        return buildGeometryNavigationSteps(points);
+    }
+
+    private List<NavigationStep> buildApiNavigationSteps(
+            RouteResponse.RouteOption route
+    ) {
+        List<NavigationStep> steps = new ArrayList<>();
+        if (route == null || route.navigation_steps == null) {
+            return steps;
+        }
+        for (RouteResponse.NavigationStep step : route.navigation_steps) {
+            if (step == null || step.instruction == null
+                    || step.instruction.trim().isEmpty()
+                    || step.location == null
+                    || !Double.isFinite(step.location.lat)
+                    || !Double.isFinite(step.location.lon)
+                    || step.location.lat < -90.0 || step.location.lat > 90.0
+                    || step.location.lon < -180.0 || step.location.lon > 180.0) {
+                continue;
+            }
+            steps.add(new NavigationStep(
+                    step.instruction,
+                    (int) Math.round(Math.max(0.0, step.distance_m)),
+                    normalizeManeuver(step.maneuver),
+                    Point.fromLngLat(step.location.lon, step.location.lat)
+            ));
+        }
+        return steps;
+    }
+
+    private String normalizeManeuver(String maneuver) {
+        if (maneuver == null) {
+            return "straight";
+        }
+        switch (maneuver.toLowerCase(Locale.ROOT)) {
+            case "left":
+                return "left";
+            case "right":
+                return "right";
+            case "uturn":
+                return "uturn";
+            case "roundabout":
+                return "roundabout";
+            case "finish":
+            case "arrive":
+                return "finish";
+            default:
+                return "straight";
+        }
+    }
+
+    private List<NavigationStep> buildGeometryNavigationSteps(List<Point> points) {
         List<NavigationStep> steps = new ArrayList<>();
         if (points == null || points.size() < 2) {
             return steps;
@@ -2474,6 +2725,7 @@ public class MapaFragment extends Fragment {
     @Override
     public void onDestroyView() {
         routeSearchGeneration++;
+        mainHandler.removeCallbacks(reportExpiryCleanup);
 
         if (locationComponent != null
                 && locationListenerAdded) {
